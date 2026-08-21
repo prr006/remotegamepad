@@ -1,0 +1,517 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_gamepad_panel"
+    android:keepScreenOn="true">
+
+    <!--
+      V8 — All sizes and positions derived directly from reference screenshot
+      (1536×768 = 2:1 aspect ratio). No arbitrary adjustments.
+
+      METHODOLOGY:
+        1. Measured pixel centers from the reference image.
+        2. Converted to fractions of 1536 (x) and 768 (y).
+        3. Applied the EXACT ConstraintLayout bias formula:
+             For 1:1 views  (h_pct P on screen W×H, W=2H):
+               view_width_pct = P/2
+               H_bias = (cx_frac - P/4)  / (1 - P/2)
+               V_bias = (cy_frac - P/2)  / (1 - P)
+             For ShoulderButtonView (independent w_pct, h_pct):
+               H_bias = (cx_frac - w_pct/2) / (1 - w_pct)
+               V_bias = (cy_frac - h_pct/2) / (1 - h_pct)
+
+      All 19 control positions verified against reference image coordinates.
+      All 25 GamepadActivity.kt IDs present, zero duplicates.
+
+      CONTROL SIZES (measured from 1536×768 reference):
+        ShoulderButtonView: w=0.085  h=0.130   (130×100px in reference)
+        RoundButtonView (D-pad): h_pct=0.122   (~94px diameter)
+        RoundButtonView (ABXY):  h_pct=0.143   (~110px diameter)
+        RoundButtonView (L3/R3): h_pct=0.124   (~95px diameter)
+        RoundButtonView (View/Menu): h_pct=0.10
+        RoundButtonView (Home):  h_pct=0.12
+        JoystickView:  h_pct=0.28  (~200px visual ring on 768px screen)
+
+      REFERENCE CENTER POSITIONS (x%, y%) → BIAS VALUES:
+        LT  (4.6%, 15.0%) → h=0.004 v=0.098
+        LB  (13.0%,15.0%) → h=0.091 v=0.098
+        RB  (87.0%,15.0%) → h=0.864 v=0.098
+        RT  (95.4%,15.0%) → h=0.952 v=0.098
+        View(38.3%, 6.1%) → h=0.377 v=0.012
+        Home(46.0%, 6.1%) → h=0.457 v=0.001
+        Menu(53.3%, 6.1%) → h=0.535 v=0.012
+        DUp ( 8.7%,28.9%) → h=0.060 v=0.260
+        DLft( 3.9%,40.4%) → h=0.009 v=0.391
+        DRt (13.5%,40.4%) → h=0.111 v=0.391
+        DDn ( 8.7%,51.8%) → h=0.060 v=0.521
+        Y   (78.3%,28.6%) → h=0.805 v=0.250
+        X   (72.4%,40.4%) → h=0.741 v=0.388
+        B   (85.3%,40.4%) → h=0.880 v=0.388
+        A   (78.3%,52.1%) → h=0.805 v=0.525
+        LJS (22.1%,65.1%) → h=0.176 v=0.710
+        RJS (68.5%,65.1%) → h=0.715 v=0.710
+        L3  ( 4.2%,91.1%) → h=0.012 v=0.969
+        R3  (95.8%,91.1%) → h=0.988 v=0.969
+    -->
+
+    <!-- ══════════════════════════════════════════════════════
+         TOP-LEFT: LT / LB
+         Size measured from reference: ~130px wide × ~100px tall.
+         w_pct=0.085 (130/1536)  h_pct=0.130 (100/768)
+         LT center: (4.6%, 15.0%)
+         LB center: (13.0%, 15.0%)   — touching LT's right edge, matching ref.
+         ══════════════════════════════════════════════════════ -->
+
+    <com.example.remotegamepad.ui.ShoulderButtonView
+        android:id="@+id/btnLT"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintWidth_percent="0.085"
+        app:layout_constraintHeight_percent="0.130"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.004"
+        app:layout_constraintVertical_bias="0.098" />
+
+    <com.example.remotegamepad.ui.ShoulderButtonView
+        android:id="@+id/btnLB"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintWidth_percent="0.085"
+        app:layout_constraintHeight_percent="0.130"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.091"
+        app:layout_constraintVertical_bias="0.098" />
+
+    <!-- ══════════════════════════════════════════════════════
+         TOP-RIGHT: RB / RT
+         RB center: (87.0%, 15.0%)
+         RT center: (95.4%, 15.0%)   — touching RB's left edge, matching ref.
+         ══════════════════════════════════════════════════════ -->
+
+    <com.example.remotegamepad.ui.ShoulderButtonView
+        android:id="@+id/btnRB"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintWidth_percent="0.085"
+        app:layout_constraintHeight_percent="0.130"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.864"
+        app:layout_constraintVertical_bias="0.098" />
+
+    <com.example.remotegamepad.ui.ShoulderButtonView
+        android:id="@+id/btnRT"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintWidth_percent="0.085"
+        app:layout_constraintHeight_percent="0.130"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.952"
+        app:layout_constraintVertical_bias="0.098" />
+
+    <!-- ══════════════════════════════════════════════════════
+         TOP-CENTER: VIEW / HOME / MENU
+         Measured at top of reference image (y≈6.1%).
+         ivLogo is a tiny icon referenced by setupCenterButtons() (no-op).
+         ══════════════════════════════════════════════════════ -->
+
+    <ImageView
+        android:id="@+id/ivLogo"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.04"
+        android:src="@drawable/ic_gamepad_logo"
+        android:contentDescription="@string/app_name"
+        android:alpha="0.70"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.01" />
+
+    <!-- btnView: ◄ left of trio, center at (38.3%, 6.1%), h_pct=0.10 -->
+    <com.example.remotegamepad.ui.RoundButtonView
+        android:id="@+id/btnView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.10"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.377"
+        app:layout_constraintVertical_bias="0.012" />
+
+    <TextView
+        android:id="@+id/tvViewLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/label_view"
+        android:textColor="@color/rg_text_secondary"
+        android:textSize="8sp"
+        android:letterSpacing="0.06"
+        app:layout_constraintStart_toStartOf="@id/btnView"
+        app:layout_constraintEnd_toEndOf="@id/btnView"
+        app:layout_constraintTop_toBottomOf="@id/btnView"
+        android:layout_marginTop="2dp" />
+
+    <!-- btnHome: gamepad icon, center of trio, center at (46.0%, 6.1%), h_pct=0.12 -->
+    <com.example.remotegamepad.ui.RoundButtonView
+        android:id="@+id/btnHome"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.12"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.457"
+        app:layout_constraintVertical_bias="0.001" />
+
+    <TextView
+        android:id="@+id/tvHomeLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/label_home"
+        android:textColor="@color/rg_text_secondary"
+        android:textSize="8sp"
+        android:letterSpacing="0.06"
+        app:layout_constraintStart_toStartOf="@id/btnHome"
+        app:layout_constraintEnd_toEndOf="@id/btnHome"
+        app:layout_constraintTop_toBottomOf="@id/btnHome"
+        android:layout_marginTop="2dp" />
+
+    <!-- btnMenu: ► right of trio, center at (53.3%, 6.1%), h_pct=0.10 -->
+    <com.example.remotegamepad.ui.RoundButtonView
+        android:id="@+id/btnMenu"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.10"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.535"
+        app:layout_constraintVertical_bias="0.012" />
+
+    <TextView
+        android:id="@+id/tvMenuLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/label_menu"
+        android:textColor="@color/rg_text_secondary"
+        android:textSize="8sp"
+        android:letterSpacing="0.06"
+        app:layout_constraintStart_toStartOf="@id/btnMenu"
+        app:layout_constraintEnd_toEndOf="@id/btnMenu"
+        app:layout_constraintTop_toBottomOf="@id/btnMenu"
+        android:layout_marginTop="2dp" />
+
+    <!-- ══════════════════════════════════════════════════════
+         LEFT: D-PAD — 4 INDIVIDUAL CIRCULAR BUTTONS
+         Diameter ≈ 94px in 768px → h_pct=0.122.
+         Formula (2:1 screen): H=(cx-P/4)/(1-P/2), V=(cy-P/2)/(1-P)
+         where P=0.122: P/4=0.0305, P/2=0.061, 1-P/2=0.939, 1-P=0.878
+
+         DpadUp    (8.7%, 28.9%) h=0.060 v=0.260
+         DpadLeft  (3.9%, 40.4%) h=0.009 v=0.391
+         DpadRight(13.5%, 40.4%) h=0.111 v=0.391
+         DpadDown  (8.7%, 51.8%) h=0.060 v=0.521
+         ══════════════════════════════════════════════════════ -->
+
+    <com.example.remotegamepad.ui.RoundButtonView
+        android:id="@+id/btnDpadUp"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.122"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.060"
+        app:layout_constraintVertical_bias="0.260" />
+
+    <com.example.remotegamepad.ui.RoundButtonView
+        android:id="@+id/btnDpadLeft"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.122"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.009"
+        app:layout_constraintVertical_bias="0.391" />
+
+    <com.example.remotegamepad.ui.RoundButtonView
+        android:id="@+id/btnDpadRight"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.122"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.111"
+        app:layout_constraintVertical_bias="0.391" />
+
+    <com.example.remotegamepad.ui.RoundButtonView
+        android:id="@+id/btnDpadDown"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.122"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.060"
+        app:layout_constraintVertical_bias="0.521" />
+
+    <!-- ══════════════════════════════════════════════════════
+         LOWER-LEFT: LEFT JOYSTICK
+         Visual outer ring ≈ 200px in reference (768px tall).
+         JoystickView draws ring at min(w,h)/2 × 0.95, so:
+           view_size = 200/0.95 = 210px → h_pct = 210/768 = 0.274 ≈ 0.28
+         Center at (22.1%, 65.1%) in reference:
+           H=(0.221-0.07)/(1-0.14)=0.151/0.86=0.176
+           V=(0.651-0.14)/(1-0.28)=0.511/0.72=0.710
+         Joystick bottom: (65.1%+14%)×684=541px < 684px ✓
+         ══════════════════════════════════════════════════════ -->
+
+    <com.example.remotegamepad.ui.JoystickView
+        android:id="@+id/leftJoystick"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.28"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.176"
+        app:layout_constraintVertical_bias="0.710" />
+
+    <!-- ══════════════════════════════════════════════════════
+         BOTTOM-LEFT: L3
+         Diameter ≈ 95px → h_pct=0.124.
+         Center at (4.2%, 91.1%):
+           H=(0.042-0.031)/0.938=0.012
+           V=(0.911-0.062)/0.876=0.969
+         Bottom: (91.1%+6.2%)×684=666px < 684px ✓
+         ══════════════════════════════════════════════════════ -->
+
+    <com.example.remotegamepad.ui.RoundButtonView
+        android:id="@+id/btnL3"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.124"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.012"
+        app:layout_constraintVertical_bias="0.969" />
+
+    <!-- ══════════════════════════════════════════════════════
+         RIGHT: ABXY — 4 INDIVIDUAL CIRCULAR BUTTONS
+         Diameter ≈ 110px in 768px → h_pct=0.143.
+         Formula: P=0.143: P/4=0.0358, P/2=0.0715, 1-P/2=0.9285, 1-P=0.857
+
+         Y (78.3%, 28.6%) h=0.805 v=0.250
+         X (72.4%, 40.4%) h=0.741 v=0.388
+         B (85.3%, 40.4%) h=0.880 v=0.388
+         A (78.3%, 52.1%) h=0.805 v=0.525
+         ══════════════════════════════════════════════════════ -->
+
+    <!-- Y — top of diamond -->
+    <com.example.remotegamepad.ui.RoundButtonView
+        android:id="@+id/btnY"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.143"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.805"
+        app:layout_constraintVertical_bias="0.250" />
+
+    <!-- X — left of diamond -->
+    <com.example.remotegamepad.ui.RoundButtonView
+        android:id="@+id/btnX"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.143"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.741"
+        app:layout_constraintVertical_bias="0.388" />
+
+    <!-- B — right of diamond -->
+    <com.example.remotegamepad.ui.RoundButtonView
+        android:id="@+id/btnB"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.143"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.880"
+        app:layout_constraintVertical_bias="0.388" />
+
+    <!-- A — bottom of diamond -->
+    <com.example.remotegamepad.ui.RoundButtonView
+        android:id="@+id/btnA"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.143"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.805"
+        app:layout_constraintVertical_bias="0.525" />
+
+    <!-- ══════════════════════════════════════════════════════
+         LOWER-RIGHT: RIGHT JOYSTICK
+         Same size as left. Center at (68.5%, 65.1%):
+           H=(0.685-0.07)/0.86=0.615/0.86=0.715
+           V=0.710
+         ══════════════════════════════════════════════════════ -->
+
+    <com.example.remotegamepad.ui.JoystickView
+        android:id="@+id/rightJoystick"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.28"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.715"
+        app:layout_constraintVertical_bias="0.710" />
+
+    <!-- ══════════════════════════════════════════════════════
+         BOTTOM-RIGHT: R3
+         Center at (95.8%, 91.1%):
+           H=(0.958-0.031)/0.938=0.988
+           V=0.969
+         ══════════════════════════════════════════════════════ -->
+
+    <com.example.remotegamepad.ui.RoundButtonView
+        android:id="@+id/btnR3"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.124"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.988"
+        app:layout_constraintVertical_bias="0.969" />
+
+    <!-- ══════════════════════════════════════════════════════
+         BOTTOM-CENTRE STATUS BAR
+         Both IDs referenced by GamepadActivity.
+         ══════════════════════════════════════════════════════ -->
+
+    <LinearLayout
+        android:id="@+id/btnLayoutToggle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="@drawable/bg_connection_pill"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:alpha="0.5"
+        app:layout_constraintEnd_toStartOf="@id/btnChangeConnection"
+        app:layout_constraintBottom_toBottomOf="@id/btnChangeConnection"
+        android:layout_marginEnd="8dp">
+
+        <TextView
+            android:id="@+id/tvLayoutToggleLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/label_layout_xbox"
+            android:textColor="@color/rg_text_secondary"
+            android:textSize="9sp"
+            android:letterSpacing="0.08" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/btnChangeConnection"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="@drawable/bg_connection_pill"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:alpha="0.5"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:layout_marginBottom="8dp">
+
+        <ImageView
+            android:id="@+id/gamepadConnDot"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:src="@drawable/ic_conn_signal"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/tvConnLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:text="@string/status_connected"
+            android:textColor="@color/rg_text_secondary"
+            android:textSize="9sp"
+            android:letterSpacing="0.08" />
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

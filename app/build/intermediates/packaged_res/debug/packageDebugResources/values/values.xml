@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="rg_accent_blue">#3DA5FF</color>
+    <color name="rg_accent_blue_dim">#1F5C99</color>
+    <color name="rg_bg_bottom">#0A0C10</color>
+    <color name="rg_bg_top">#1A1D23</color>
+    <color name="rg_btn_a">#5FBF77</color>
+    <color name="rg_btn_b">#E15A5A</color>
+    <color name="rg_btn_x">#4FA3E3</color>
+    <color name="rg_btn_y">#E8C547</color>
+    <color name="rg_connected_green">#4CD964</color>
+    <color name="rg_disconnected_red">#E15A5A</color>
+    <color name="rg_panel">#14171C</color>
+    <color name="rg_text_primary">#E6E8EB</color>
+    <color name="rg_text_secondary">#8B93A1</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="white">#FFFFFFFF</color>
+    <string name="app_name">RemoteGamepad</string>
+    <string name="bt_connect_failed">Couldn\'t connect to that device.</string>
+    <string name="bt_description">Connect to a phone-paired Bluetooth device.</string>
+    <string name="bt_disabled_hint">Turn on Bluetooth to see paired devices.</string>
+    <string name="bt_no_paired">No paired devices found. Pair a device in system Bluetooth settings first.</string>
+    <string name="bt_not_supported">Bluetooth isn\'t available on this device.</string>
+    <string name="bt_permission_denied">Bluetooth permission denied.</string>
+    <string name="bt_permission_hint">Bluetooth permission is needed to see paired devices.</string>
+    <string name="btn_enable_bluetooth">ENABLE BLUETOOTH</string>
+    <string name="btn_refresh">REFRESH</string>
+    <string name="btn_scan_qr">SCAN QR / CONNECT</string>
+    <string name="label_change_connection">CHANGE</string>
+    <string name="label_home">HOME</string>
+    <string name="label_layout_ps">PS</string>
+    <string name="label_layout_xbox">XBOX</string>
+    <string name="label_menu">MENU</string>
+    <string name="label_view">VIEW</string>
+    <string name="pair_label">PAIR</string>
+    <string name="qr_scan_prompt">Scan PC QR</string>
+    <string name="status_connected">CONNECTED</string>
+    <string name="status_connecting">CONNECTING…</string>
+    <string name="status_disconnected">NOT CONNECTED</string>
+    <string name="status_failed">CONNECTION FAILED</string>
+    <string name="subtitle_connect">Choose a connection method</string>
+    <string name="tab_bluetooth">BLUETOOTH</string>
+    <string name="tab_wifi">WI-FI</string>
+    <string name="title_connect">CONNECT YOUR GAMEPAD</string>
+    <string name="wifi_description">Scan the QR code shown by the PC app to pair over Wi-Fi.</string>
+    <style name="Theme.RemoteGamepad" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">#1a0000</item>
+        <item name="android:statusBarColor">#1a0000</item>
+        <item name="android:navigationBarColor">#1a0000</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+</resources>

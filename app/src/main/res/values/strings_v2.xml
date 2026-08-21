@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Merge into your existing strings.xml -->
+    <string name="status_connected">CONNECTED</string>
+    <string name="status_disconnected">NOT CONNECTED</string>
+    <string name="pair_label">PAIR</string>
+    <string name="label_view">VIEW</string>
+    <string name="label_home">HOME</string>
+    <string name="label_menu">MENU</string>
+</resources>

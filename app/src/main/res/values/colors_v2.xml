@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- RemoteGamepad V2 dark premium palette. Merge these into your
+         existing colors.xml (or keep as a separate file - Android doesn't
+         care how values/ resources are split across files). -->
+    <color name="rg_bg_top">#1A1D23</color>
+    <color name="rg_bg_bottom">#0A0C10</color>
+    <color name="rg_panel">#14171C</color>
+    <color name="rg_accent_blue">#3DA5FF</color>
+    <color name="rg_accent_blue_dim">#1F5C99</color>
+    <color name="rg_text_primary">#E6E8EB</color>
+    <color name="rg_text_secondary">#8B93A1</color>
+    <color name="rg_connected_green">#4CD964</color>
+    <color name="rg_disconnected_red">#E15A5A</color>
+
+    <!-- Muted ABXY accents - deliberately desaturated vs. stock Xbox
+         colors so this reads as its own design, not a copy. -->
+    <color name="rg_btn_a">#5FBF77</color>
+    <color name="rg_btn_b">#E15A5A</color>
+    <color name="rg_btn_x">#4FA3E3</color>
+    <color name="rg_btn_y">#E8C547</color>
+</resources>

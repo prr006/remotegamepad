@@ -1,0 +1,178 @@
+[
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\xml_data_extraction_rules.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\xml\\data_extraction_rules.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_bg_connection_pill.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\bg_connection_pill.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\mipmap-xxxhdpi_ic_launcher_foreground.webp.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\mipmap-xxxhdpi\\ic_launcher_foreground.webp"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_ic_launcher_foreground.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_bg_controller.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\bg_controller.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_thumb_style.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\thumb_style.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_bg_tab_selector.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\bg_tab_selector.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\mipmap-xxhdpi_ic_launcher_round.webp.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\mipmap-xxhdpi\\ic_launcher_round.webp"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_bg_card_panel.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\bg_card_panel.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\mipmap-hdpi_ic_launcher_round.webp.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\mipmap-hdpi\\ic_launcher_round.webp"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_circle_button.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\circle_button.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\layout_item_bt_device.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\layout\\item_bt_device.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_joystick_base.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\joystick_base.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_ic_conn_signal.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\ic_conn_signal.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\mipmap-xhdpi_ic_launcher_foreground.webp.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\mipmap-xhdpi\\ic_launcher_foreground.webp"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_joystick_thumb.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\joystick_thumb.xml"
+    },
+    {
+        "merged": "com.example.remotegamepad.app-debug-45:/layout_activity_gamepad.xml.flat",
+        "source": "com.example.remotegamepad.app-main-47:/layout/activity_gamepad.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\layout_activity_main.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\layout\\activity_main.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_btn_red.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\btn_red.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\mipmap-anydpi-v26\\ic_launcher_round.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\mipmap-xxxhdpi_ic_launcher.webp.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\mipmap-xxxhdpi\\ic_launcher.webp"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_bg_gamepad_panel.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\bg_gamepad_panel.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_ic_launcher_background.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\ic_launcher_background.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_ic_gamepad_logo.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\ic_gamepad_logo.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\mipmap-xhdpi_ic_launcher_round.webp.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\mipmap-xhdpi\\ic_launcher_round.webp"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\mipmap-anydpi-v26\\ic_launcher.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\mipmap-mdpi_ic_launcher.webp.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\mipmap-mdpi\\ic_launcher.webp"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\mipmap-mdpi_ic_launcher_foreground.webp.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\mipmap-mdpi\\ic_launcher_foreground.webp"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_dot_connected.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\dot_connected.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\mipmap-hdpi_ic_launcher_foreground.webp.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\mipmap-hdpi\\ic_launcher_foreground.webp"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_dpad_shape.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\dpad_shape.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\mipmap-xhdpi_ic_launcher.webp.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\mipmap-xhdpi\\ic_launcher.webp"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\layout_activity_gamepad.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\layout\\activity_gamepad.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_bg_gradient.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\bg_gradient.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\xml_backup_rules.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\xml\\backup_rules.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\mipmap-xxhdpi_ic_launcher.webp.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\mipmap-xxhdpi\\ic_launcher.webp"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\layout_activity_connection.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\layout\\activity_connection.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_dot_disconnected.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\dot_disconnected.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\mipmap-mdpi_ic_launcher_round.webp.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\mipmap-mdpi\\ic_launcher_round.webp"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\mipmap-xxhdpi_ic_launcher_foreground.webp.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\mipmap-xxhdpi\\ic_launcher_foreground.webp"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\mipmap-xxxhdpi_ic_launcher_round.webp.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\mipmap-xxxhdpi\\ic_launcher_round.webp"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_btn_primary.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\btn_primary.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\drawable_bg_device_row.xml.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\drawable\\bg_device_row.xml"
+    },
+    {
+        "merged": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-debug-45:\\mipmap-hdpi_ic_launcher.webp.flat",
+        "source": "C:\\Users\\Rahul\\.gradle\\daemon\\9.4.1\\com.example.remotegamepad.app-main-47:\\mipmap-hdpi\\ic_launcher.webp"
+    }
+]

@@ -1,0 +1,290 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.example.remotegamepad"
+4    android:versionCode="1"
+5    android:versionName="1.0" >
+6
+7    <uses-sdk
+7-->INJECTED
+8        android:minSdkVersion="24"
+8-->INJECTED
+9        android:targetSdkVersion="36" />
+9-->INJECTED
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:4:5-66
+11-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:4:22-64
+12    <uses-permission android:name="android.permission.CAMERA" />
+12-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:5:5-65
+12-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:5:22-62
+13
+14    <!--
+15         Wi-Fi lock used by SocketClient to keep the radio out of
+16         power-save mode during an active session (see SocketClient).
+17    -->
+18    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+18-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:9:5-75
+18-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:9:22-73
+19    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+19-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:10:5-75
+19-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:10:22-73
+20
+21    <!--
+22         Classic Bluetooth (RFCOMM/SPP) connection layer. Legacy
+23         permissions cover API <= 30; BLUETOOTH_CONNECT is the API 31+
+24         runtime permission requested at connect time.
+25    -->
+26    <uses-permission
+26-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:15:5-94
+27        android:name="android.permission.BLUETOOTH"
+27-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:15:22-65
+28        android:maxSdkVersion="30" />
+28-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:15:66-92
+29    <uses-permission
+29-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:16:5-100
+30        android:name="android.permission.BLUETOOTH_ADMIN"
+30-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:16:22-71
+31        android:maxSdkVersion="30" />
+31-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:16:72-98
+32    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+32-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:17:5-75
+32-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:17:22-73
+33    <uses-permission
+33-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:18:5-19:58
+34        android:name="android.permission.BLUETOOTH_SCAN"
+34-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:18:22-70
+35        android:usesPermissionFlags="neverForLocation" />
+35-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:19:9-55
+36
+37    <uses-feature
+37-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:21:5-87
+38        android:name="android.hardware.bluetooth"
+38-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:21:19-60
+39        android:required="false" />
+39-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:21:61-85
+40
+41    <permission
+41-->[androidx.core:core:1.16.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\8ec6cd0a91628ba578d222a8c37bb02b\transformed\core-1.16.0\AndroidManifest.xml:22:5-24:47
+42        android:name="com.example.remotegamepad.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+42-->[androidx.core:core:1.16.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\8ec6cd0a91628ba578d222a8c37bb02b\transformed\core-1.16.0\AndroidManifest.xml:23:9-81
+43        android:protectionLevel="signature" />
+43-->[androidx.core:core:1.16.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\8ec6cd0a91628ba578d222a8c37bb02b\transformed\core-1.16.0\AndroidManifest.xml:24:9-44
+44
+45    <uses-permission android:name="com.example.remotegamepad.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" /> <!-- Don't require camera, as this requires a rear camera. This allows it to work on the Nexus 7 -->
+45-->[androidx.core:core:1.16.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\8ec6cd0a91628ba578d222a8c37bb02b\transformed\core-1.16.0\AndroidManifest.xml:26:5-97
+45-->[androidx.core:core:1.16.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\8ec6cd0a91628ba578d222a8c37bb02b\transformed\core-1.16.0\AndroidManifest.xml:26:22-94
+46    <uses-feature
+46-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:25:5-27:36
+47        android:name="android.hardware.camera"
+47-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:26:9-47
+48        android:required="false" />
+48-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:27:9-33
+49    <uses-feature
+49-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:28:5-30:36
+50        android:name="android.hardware.camera.front"
+50-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:29:9-53
+51        android:required="false" /> <!-- TODO replace above two with next line after Android 4.2 -->
+51-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:30:9-33
+52    <!-- <uses-feature android:name="android.hardware.camera.any"/> -->
+53    <uses-feature
+53-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:33:5-35:36
+54        android:name="android.hardware.camera.autofocus"
+54-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:34:9-57
+55        android:required="false" />
+55-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:35:9-33
+56    <uses-feature
+56-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:36:5-38:36
+57        android:name="android.hardware.camera.flash"
+57-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:37:9-53
+58        android:required="false" />
+58-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:38:9-33
+59    <uses-feature
+59-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:39:5-41:36
+60        android:name="android.hardware.screen.landscape"
+60-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:40:9-57
+61        android:required="false" />
+61-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:41:9-33
+62    <uses-feature
+62-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:42:5-44:36
+63        android:name="android.hardware.wifi"
+63-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:43:9-45
+64        android:required="false" />
+64-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:44:9-33
+65
+66    <application
+66-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:23:5-55:19
+67        android:allowBackup="true"
+67-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:24:9-35
+68        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+68-->[androidx.core:core:1.16.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\8ec6cd0a91628ba578d222a8c37bb02b\transformed\core-1.16.0\AndroidManifest.xml:28:18-86
+69        android:debuggable="true"
+70        android:extractNativeLibs="false"
+70-->INJECTED
+71        android:icon="@mipmap/ic_launcher"
+71-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:25:9-43
+72        android:label="Remote Gamepad"
+72-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:26:9-39
+73        android:roundIcon="@mipmap/ic_launcher_round"
+73-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:27:9-54
+74        android:supportsRtl="true"
+74-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:28:9-35
+75        android:testOnly="true"
+76        android:theme="@style/Theme.RemoteGamepad" >
+76-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:29:9-51
+77
+78        <!--
+79             Screen 1: connection setup (Wi-Fi QR pairing, Bluetooth).
+80             This is the app's launcher / entry point.
+81        -->
+82        <activity
+82-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:33:9-43:20
+83            android:name="com.example.remotegamepad.ConnectionActivity"
+83-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:34:13-47
+84            android:configChanges="orientation|screenSize|keyboardHidden"
+84-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:37:13-74
+85            android:exported="true"
+85-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:35:13-36
+86            android:screenOrientation="landscape"
+86-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:36:13-50
+87            android:windowSoftInputMode="adjustNothing" >
+87-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:38:13-56
+88            <intent-filter>
+88-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:39:13-42:29
+89                <action android:name="android.intent.action.MAIN" />
+89-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:40:17-69
+89-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:40:25-66
+90
+91                <category android:name="android.intent.category.LAUNCHER" />
+91-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:41:17-77
+91-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:41:27-74
+92            </intent-filter>
+93        </activity>
+94
+95        <!--
+96             Screen 2: the gamepad itself. Only reachable once
+97             ConnectionActivity has established a connection; contains no
+98             connection setup UI of its own.
+99        -->
+100        <activity
+100-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:48:9-53:59
+101            android:name="com.example.remotegamepad.GamepadActivity"
+101-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:49:13-44
+102            android:configChanges="orientation|screenSize|keyboardHidden"
+102-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:52:13-74
+103            android:exported="false"
+103-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:50:13-37
+104            android:screenOrientation="landscape"
+104-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:51:13-50
+105            android:windowSoftInputMode="adjustNothing" />
+105-->C:\Users\Rahul\Downloads\RemoteGamepad-main-updated\RemoteGamepad-main\app\src\main\AndroidManifest.xml:53:13-56
+106        <activity
+106-->[androidx.compose.ui:ui-tooling-android:1.10.4] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\593778e58b3aa7b64fc11d14bb7786ec\transformed\ui-tooling\AndroidManifest.xml:23:9-25:39
+107            android:name="androidx.compose.ui.tooling.PreviewActivity"
+107-->[androidx.compose.ui:ui-tooling-android:1.10.4] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\593778e58b3aa7b64fc11d14bb7786ec\transformed\ui-tooling\AndroidManifest.xml:24:13-71
+108            android:exported="true" />
+108-->[androidx.compose.ui:ui-tooling-android:1.10.4] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\593778e58b3aa7b64fc11d14bb7786ec\transformed\ui-tooling\AndroidManifest.xml:25:13-36
+109        <activity
+109-->[androidx.compose.ui:ui-test-manifest:1.10.4] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\1ea40f094cb16ef049c65222bb0a62b4\transformed\ui-test-manifest-1.10.4\AndroidManifest.xml:23:9-26:79
+110            android:name="androidx.activity.ComponentActivity"
+110-->[androidx.compose.ui:ui-test-manifest:1.10.4] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\1ea40f094cb16ef049c65222bb0a62b4\transformed\ui-test-manifest-1.10.4\AndroidManifest.xml:24:13-63
+111            android:exported="true"
+111-->[androidx.compose.ui:ui-test-manifest:1.10.4] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\1ea40f094cb16ef049c65222bb0a62b4\transformed\ui-test-manifest-1.10.4\AndroidManifest.xml:25:13-36
+112            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+112-->[androidx.compose.ui:ui-test-manifest:1.10.4] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\1ea40f094cb16ef049c65222bb0a62b4\transformed\ui-test-manifest-1.10.4\AndroidManifest.xml:26:13-76
+113
+114        <provider
+114-->[androidx.emoji2:emoji2:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\61b06299ef8dbee97274c7d3e3250f3e\transformed\emoji2-1.4.0\AndroidManifest.xml:24:9-32:20
+115            android:name="androidx.startup.InitializationProvider"
+115-->[androidx.emoji2:emoji2:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\61b06299ef8dbee97274c7d3e3250f3e\transformed\emoji2-1.4.0\AndroidManifest.xml:25:13-67
+116            android:authorities="com.example.remotegamepad.androidx-startup"
+116-->[androidx.emoji2:emoji2:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\61b06299ef8dbee97274c7d3e3250f3e\transformed\emoji2-1.4.0\AndroidManifest.xml:26:13-68
+117            android:exported="false" >
+117-->[androidx.emoji2:emoji2:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\61b06299ef8dbee97274c7d3e3250f3e\transformed\emoji2-1.4.0\AndroidManifest.xml:27:13-37
+118            <meta-data
+118-->[androidx.emoji2:emoji2:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\61b06299ef8dbee97274c7d3e3250f3e\transformed\emoji2-1.4.0\AndroidManifest.xml:29:13-31:52
+119                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+119-->[androidx.emoji2:emoji2:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\61b06299ef8dbee97274c7d3e3250f3e\transformed\emoji2-1.4.0\AndroidManifest.xml:30:17-75
+120                android:value="androidx.startup" />
+120-->[androidx.emoji2:emoji2:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\61b06299ef8dbee97274c7d3e3250f3e\transformed\emoji2-1.4.0\AndroidManifest.xml:31:17-49
+121            <meta-data
+121-->[androidx.lifecycle:lifecycle-process:2.9.4] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\2f607b49d16de0e42e6bd097ed27cae8\transformed\lifecycle-process-2.9.4\AndroidManifest.xml:29:13-31:52
+122                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+122-->[androidx.lifecycle:lifecycle-process:2.9.4] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\2f607b49d16de0e42e6bd097ed27cae8\transformed\lifecycle-process-2.9.4\AndroidManifest.xml:30:17-78
+123                android:value="androidx.startup" />
+123-->[androidx.lifecycle:lifecycle-process:2.9.4] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\2f607b49d16de0e42e6bd097ed27cae8\transformed\lifecycle-process-2.9.4\AndroidManifest.xml:31:17-49
+124            <meta-data
+124-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:29:13-31:52
+125                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+125-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:30:17-85
+126                android:value="androidx.startup" />
+126-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:31:17-49
+127        </provider>
+128
+129        <uses-library
+129-->[androidx.window:window:1.5.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\94bc62be886592253e136e10b972224f\transformed\window-1.5.0\AndroidManifest.xml:23:9-25:40
+130            android:name="androidx.window.extensions"
+130-->[androidx.window:window:1.5.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\94bc62be886592253e136e10b972224f\transformed\window-1.5.0\AndroidManifest.xml:24:13-54
+131            android:required="false" />
+131-->[androidx.window:window:1.5.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\94bc62be886592253e136e10b972224f\transformed\window-1.5.0\AndroidManifest.xml:25:13-37
+132        <uses-library
+132-->[androidx.window:window:1.5.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\94bc62be886592253e136e10b972224f\transformed\window-1.5.0\AndroidManifest.xml:26:9-28:40
+133            android:name="androidx.window.sidecar"
+133-->[androidx.window:window:1.5.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\94bc62be886592253e136e10b972224f\transformed\window-1.5.0\AndroidManifest.xml:27:13-51
+134            android:required="false" />
+134-->[androidx.window:window:1.5.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\94bc62be886592253e136e10b972224f\transformed\window-1.5.0\AndroidManifest.xml:28:13-37
+135
+136        <receiver
+136-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:34:9-52:20
+137            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+137-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:35:13-76
+138            android:directBootAware="false"
+138-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:36:13-44
+139            android:enabled="true"
+139-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:37:13-35
+140            android:exported="true"
+140-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:38:13-36
+141            android:permission="android.permission.DUMP" >
+141-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:39:13-57
+142            <intent-filter>
+142-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:40:13-42:29
+143                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+143-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:17-91
+143-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:25-88
+144            </intent-filter>
+145            <intent-filter>
+145-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:43:13-45:29
+146                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+146-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:17-85
+146-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:25-82
+147            </intent-filter>
+148            <intent-filter>
+148-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:46:13-48:29
+149                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+149-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:17-88
+149-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:25-85
+150            </intent-filter>
+151            <intent-filter>
+151-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:49:13-51:29
+152                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+152-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:17-95
+152-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d533fe1e132412ee00424c53308bb249\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:25-92
+153            </intent-filter>
+154        </receiver>
+155
+156        <activity
+156-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:47:9-53:63
+157            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+157-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:48:13-74
+158            android:clearTaskOnLaunch="true"
+158-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:49:13-45
+159            android:screenOrientation="sensorLandscape"
+159-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:50:13-56
+160            android:stateNotNeeded="true"
+160-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:51:13-42
+161            android:theme="@style/zxing_CaptureTheme"
+161-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:52:13-54
+162            android:windowSoftInputMode="stateAlwaysHidden" />
+162-->[com.journeyapps:zxing-android-embedded:4.3.0] C:\Users\Rahul\.gradle\caches\9.4.1\transforms\d94edb9421bdd8bb999d9fb5c00a7b0d\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:53:13-60
+163    </application>
+164
+165</manifest>

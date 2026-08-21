@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_gamepad_panel">
+
+    <ImageView
+        android:id="@+id/ivConnLogo"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:src="@drawable/ic_gamepad_logo"
+        android:contentDescription="@string/app_name"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="14dp" />
+
+    <TextView
+        android:id="@+id/tvConnTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/title_connect"
+        android:textColor="@color/rg_text_primary"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.06"
+        app:layout_constraintTop_toBottomOf="@id/ivConnLogo"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="6dp" />
+
+    <TextView
+        android:id="@+id/tvConnSubtitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/subtitle_connect"
+        android:textColor="@color/rg_text_secondary"
+        android:textSize="11sp"
+        app:layout_constraintTop_toBottomOf="@id/tvConnTitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="2dp" />
+
+    <!-- ===================== METHOD TABS ===================== -->
+
+    <LinearLayout
+        android:id="@+id/tabRow"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="12dp"
+        app:layout_constraintTop_toBottomOf="@id/tvConnSubtitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintWidth_percent="0.55">
+
+        <TextView
+            android:id="@+id/tabWifi"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:padding="10dp"
+            android:text="@string/tab_wifi"
+            android:textColor="@color/rg_text_primary"
+            android:textStyle="bold"
+            android:textSize="13sp"
+            android:background="@drawable/bg_tab_selector"
+            android:layout_marginEnd="6dp" />
+
+        <TextView
+            android:id="@+id/tabBluetooth"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:padding="10dp"
+            android:text="@string/tab_bluetooth"
+            android:textColor="@color/rg_text_primary"
+            android:textStyle="bold"
+            android:textSize="13sp"
+            android:background="@drawable/bg_tab_selector" />
+
+    </LinearLayout>
+
+    <!-- ===================== ACTIVE METHOD PANEL ===================== -->
+
+    <ScrollView
+        android:id="@+id/panelScroll"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:scrollbars="none"
+        app:layout_constraintTop_toBottomOf="@id/tabRow"
+        app:layout_constraintBottom_toTopOf="@id/statusBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintWidth_percent="0.68"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="10dp">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <!-- WI-FI PANEL -->
+            <LinearLayout
+                android:id="@+id/wifiPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:background="@drawable/bg_card_panel"
+                android:padding="18dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/wifi_description"
+                    android:textColor="@color/rg_text_secondary"
+                    android:textSize="12sp"
+                    android:gravity="center"
+                    android:layout_marginBottom="14dp" />
+
+                <TextView
+                    android:id="@+id/btnScanQr"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/btn_scan_qr"
+                    android:textColor="@color/rg_bg_bottom"
+                    android:textStyle="bold"
+                    android:textSize="13sp"
+                    android:background="@drawable/btn_primary"
+                    android:paddingStart="26dp"
+                    android:paddingEnd="26dp"
+                    android:paddingTop="12dp"
+                    android:paddingBottom="12dp" />
+
+            </LinearLayout>
+
+            <!-- BLUETOOTH PANEL -->
+            <LinearLayout
+                android:id="@+id/btPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center_horizontal"
+                android:background="@drawable/bg_card_panel"
+                android:padding="18dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/bt_description"
+                    android:textColor="@color/rg_text_secondary"
+                    android:textSize="12sp"
+                    android:gravity="center"
+                    android:layout_marginBottom="10dp" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="10dp">
+
+                    <TextView
+                        android:id="@+id/btnEnableBluetooth"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/btn_enable_bluetooth"
+                        android:textColor="@color/rg_accent_blue"
+                        android:textStyle="bold"
+                        android:textSize="12sp"
+                        android:background="@drawable/bg_tab_selector"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:paddingTop="8dp"
+                        android:paddingBottom="8dp"
+                        android:layout_marginEnd="8dp" />
+
+                    <TextView
+                        android:id="@+id/btnRefreshDevices"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/btn_refresh"
+                        android:textColor="@color/rg_text_primary"
+                        android:textStyle="bold"
+                        android:textSize="12sp"
+                        android:background="@drawable/bg_tab_selector"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:paddingTop="8dp"
+                        android:paddingBottom="8dp" />
+
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvBtHint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/rg_text_secondary"
+                    android:textSize="12sp"
+                    android:gravity="center"
+                    android:paddingTop="6dp"
+                    android:paddingBottom="6dp"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:id="@+id/btDeviceContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+            </LinearLayout>
+
+        </FrameLayout>
+
+    </ScrollView>
+
+    <!-- ===================== STATUS ===================== -->
+
+    <LinearLayout
+        android:id="@+id/statusBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_connection_pill"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:layout_marginBottom="10dp">
+
+        <View
+            android:id="@+id/connStatusDot"
+            android:layout_width="9dp"
+            android:layout_height="9dp"
+            android:background="@drawable/dot_disconnected" />
+
+        <TextView
+            android:id="@+id/tvConnStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="@string/status_disconnected"
+            android:textColor="@color/rg_text_secondary"
+            android:textSize="12sp"
+            android:letterSpacing="0.05" />
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
