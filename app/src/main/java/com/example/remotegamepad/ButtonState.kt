@@ -24,7 +24,7 @@ class ButtonState {
         val ORDER = listOf(
             "A", "B", "X", "Y",
             "LB", "RB", "LS", "RS",
-            "START", "SELECT",
+            "START", "SELECT", "HOME",
             "DPAD_UP", "DPAD_DOWN", "DPAD_LEFT", "DPAD_RIGHT",
             "LT", "RT"
         )
@@ -36,9 +36,8 @@ class ButtonState {
 
     /**
      * Records the current press/release state of one control. Unknown
-     * names (e.g. "HOME", which has no corresponding Xbox360 button on the
-     * PC side either) are ignored rather than throwing, so callers don't
-     * need a special case for buttons that fall outside the tracked set.
+     * names are ignored rather than throwing, so callers don't need a
+     * special case for buttons that fall outside the tracked set.
      */
     fun set(name: String, pressed: Boolean) {
         val idx = indexOf[name] ?: return
