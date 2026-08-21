@@ -42,13 +42,14 @@ class Program
         (7, Xbox360Button.RightThumb),
         (8, Xbox360Button.Start),
         (9, Xbox360Button.Back),
-        (10, Xbox360Button.Up),
-        (11, Xbox360Button.Down),
-        (12, Xbox360Button.Left),
-        (13, Xbox360Button.Right),
+        (10, Xbox360Button.Guide),
+        (11, Xbox360Button.Up),
+        (12, Xbox360Button.Down),
+        (13, Xbox360Button.Left),
+        (14, Xbox360Button.Right),
     };
-    const int LtBit = 14;
-    const int RtBit = 15;
+    const int LtBit = 15;
+    const int RtBit = 16;
 
     // If we haven't heard from a controller in this long, assume the
     // phone crashed / lost Wi-Fi / went out of range and force every
@@ -496,6 +497,10 @@ class Program
 
                         case "SELECT":
                             controller.SetButtonState(Xbox360Button.Back, pressed);
+                            break;
+
+                        case "HOME":
+                            controller.SetButtonState(Xbox360Button.Guide, pressed);
                             break;
 
                         case "DPAD_UP":

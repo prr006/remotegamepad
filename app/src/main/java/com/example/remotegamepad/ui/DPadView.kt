@@ -38,7 +38,10 @@ class DPadView @JvmOverloads constructor(
     // Deadzone near center where nothing is considered pressed.
     private var centerDeadzoneFrac = 0.18f
 
-    private val activeDirs = mutableSetOf<String>()
+    // Per-pointer direction ownership for proper multi-touch support.
+    // The merged state is the union of all active pointer directions.
+    private val pointerDirs = mutableMapOf<Int, Set<String>>()
+    private val mergedDirs = mutableSetOf<String>()
 
     // Cross geometry, rebuilt in onSizeChanged so it scales with the view.
     private var crossPath = Path()
@@ -125,7 +128,7 @@ class DPadView @JvmOverloads constructor(
 
         // Per-arm press highlight, clipped to that arm's own quadrant so
         // only the pressed direction lights up.
-        for (dir in activeDirs) {
+        for (dir in mergedDirs) {
             canvas.save()
             canvas.clipPath(quadrantPath(dir))
             canvas.drawPath(crossPath, activeOverlayPaint)
@@ -134,7 +137,7 @@ class DPadView @JvmOverloads constructor(
 
         // Crisp rim + faint seams separating the four arms, for a
         // premium beveled-touchscreen look rather than a flat sticker.
-        rimPaint.alpha = if (activeDirs.isEmpty()) 170 else 255
+        rimPaint.alpha = if (mergedDirs.isEmpty()) 170 else 255
         canvas.drawPath(crossPath, rimPaint)
         drawSeams(canvas)
 
@@ -178,7 +181,7 @@ class DPadView @JvmOverloads constructor(
             "RIGHT" -> "\u25B6"
             else -> ""
         }
-        arrowPaint.alpha = if (dir in activeDirs) 255 else 205
+        arrowPaint.alpha = if (dir in mergedDirs) 255 else 205
         arrowPaint.textSize = armHalfWidth * 0.85f
         val metrics = arrowPaint.fontMetrics
         val textY = y - (metrics.ascent + metrics.descent) / 2f
@@ -186,29 +189,46 @@ class DPadView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                updateFromTouch(event.x, event.y)
+        val action = event.actionMasked
+        val pointerIndex = event.actionIndex
+        val pointerId = event.getPointerId(pointerIndex)
+
+        when (action) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                // New finger touches down - calculate its directions and add to ownership map
+                val (x, y) = getPointerCoords(event, pointerIndex)
+                val dirs = calculateDirections(x, y)
+                pointerDirs[pointerId] = dirs
+                updateMergedState()
             }
-            MotionEvent.ACTION_UP,
-            MotionEvent.ACTION_CANCEL,
+            MotionEvent.ACTION_MOVE -> {
+                // One or more fingers moved - recalculate directions for all active pointers
+                for (i in 0 until event.pointerCount) {
+                    val pid = event.getPointerId(i)
+                    val (x, y) = getPointerCoords(event, i)
+                    pointerDirs[pid] = calculateDirections(x, y)
+                }
+                updateMergedState()
+            }
             MotionEvent.ACTION_POINTER_UP -> {
-                // ACTION_POINTER_UP fires when one of several fingers lifts;
-                // if any finger on the D-pad lifts, release all directions
-                // rather than leaving a direction stuck held.
-                releaseAll()
+                // One finger lifted - remove only its contribution from merged state
+                pointerDirs.remove(pointerId)
+                updateMergedState()
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                // Final lift or system cancel - clear everything
+                pointerDirs.clear()
+                updateMergedState()
             }
         }
         return true
     }
 
     /**
-     * Per-axis threshold rather than a single angle slice: if the touch is
-     * clearly off-center on X and/or Y, both axes can fire at once, which
-     * is what gives natural diagonal presses (UP+RIGHT etc.) instead of
-     * forcing a single 45-degree-wide direction choice.
+     * Calculate directions for a single pointer based on its coordinates.
+     * Returns a set of direction names (UP/DOWN/LEFT/RIGHT) that this pointer owns.
      */
-    private fun updateFromTouch(x: Float, y: Float) {
+    private fun calculateDirections(x: Float, y: Float): Set<String> {
         val cx = width / 2f
         val cy = height / 2f
         val dx = x - cx
@@ -217,29 +237,45 @@ class DPadView @JvmOverloads constructor(
         val outerR = min(width, height) / 2f
         val axisThreshold = outerR * centerDeadzoneFrac
 
-        val next = mutableSetOf<String>()
+        val dirs = mutableSetOf<String>()
         if (dist >= axisThreshold) {
-            if (dx <= -axisThreshold) next.add("LEFT")
-            if (dx >= axisThreshold) next.add("RIGHT")
-            if (dy <= -axisThreshold) next.add("UP")
-            if (dy >= axisThreshold) next.add("DOWN")
+            if (dx <= -axisThreshold) dirs.add("LEFT")
+            if (dx >= axisThreshold) dirs.add("RIGHT")
+            if (dy <= -axisThreshold) dirs.add("UP")
+            if (dy >= axisThreshold) dirs.add("DOWN")
         }
-        applyDirections(next)
+        return dirs
     }
 
-    private fun applyDirections(next: Set<String>) {
-        for (dir in next) {
-            if (activeDirs.add(dir)) onDirection?.invoke(dir, true)
+    /** Helper to extract coordinates for a specific pointer index. */
+    private fun getPointerCoords(event: MotionEvent, index: Int): Pair<Float, Float> {
+        return Pair(event.getX(index), event.getY(index))
+    }
+
+    /**
+     * Recompute mergedDirs as the union of all pointer direction sets.
+     * Fires onDirection callbacks only when directions enter or leave the merged state.
+     */
+    private fun updateMergedState() {
+        val next = mutableSetOf<String>()
+        for (dirs in pointerDirs.values) {
+            next.addAll(dirs)
         }
-        val released = activeDirs.filter { it !in next }
+        applyMergedDirections(next)
+    }
+
+    private fun applyMergedDirections(next: Set<String>) {
+        // Add new directions that weren't previously active
+        for (dir in next) {
+            if (mergedDirs.add(dir)) onDirection?.invoke(dir, true)
+        }
+        // Remove directions that are no longer in the merged set
+        val released = mergedDirs.filter { it !in next }
         for (dir in released) {
-            activeDirs.remove(dir)
+            mergedDirs.remove(dir)
             onDirection?.invoke(dir, false)
         }
+        // Redraw if anything changed
         if (next.isNotEmpty() || released.isNotEmpty()) invalidate()
-    }
-
-    private fun releaseAll() {
-        applyDirections(emptySet())
     }
 }
