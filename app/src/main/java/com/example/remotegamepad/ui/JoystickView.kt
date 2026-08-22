@@ -1,12 +1,9 @@
 package com.example.remotegamepad.ui
 
 import android.content.Context
-import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.RadialGradient
-import android.graphics.Shader
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
@@ -22,10 +19,20 @@ import kotlin.math.min
  * onClick(true) fires on ACTION_DOWN and onClick(false) on release,
  * independent of how far the stick is tilted while held.
  *
- * Touch handling / the onMove & onClick contract is unchanged from the
- * previous version - only onDraw grew richer (soft glow, an extra
- * concentric ring, a tactile dot texture on the knob, and a distinct
- * pressed state) to read as a larger, more premium control.
+ * Touch handling / the onMove & onClick contract is UNCHANGED from the
+ * previous version. Only onDraw changed: this now matches the supplied
+ * JSX reference's flat, minimal style - three thin concentric ring
+ * outlines, a flat gray center cap with a small dot-texture grip, and no
+ * gradients / glow / blur. One deliberate deviation from the JSX: the
+ * JSX's own prototype keeps its center cap perfectly fixed and only
+ * moves a tiny 6px indicator dot to show stick position. Here the whole
+ * cap continues to translate to knobX/knobY (the existing, already-
+ * established behavior) because that's what gives the user real-time
+ * visual feedback on how far/which direction the stick is tilted while
+ * dragging - flattening that to a fixed cap + tiny dot would be a
+ * meaningful usability regression, not just a style change. Flagging
+ * this for your review; easy to switch to the JSX's exact fixed-cap
+ * approach if you'd prefer strict visual fidelity over feedback clarity.
  */
 class JoystickView @JvmOverloads constructor(
     context: Context,
@@ -45,37 +52,30 @@ class JoystickView @JvmOverloads constructor(
     // Cached per-size geometry for the knob's tactile dot texture, so the
     // grid isn't recomputed every frame.
     private var textureDots = FloatArray(0)
-    private var knobRadiusCache = 0f
 
-    init {
-        // BlurMaskFilter (soft outer glow) needs a software layer.
-        setLayerType(LAYER_TYPE_SOFTWARE, null)
-    }
+    // ===================== PAINT (flat / thin-outline style) =====================
 
-    private val basePaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val outerRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        color = Color.parseColor("#3DA5FF")
-    }
-    private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        color = Color.parseColor("#2E88D9")
+        color = Color.parseColor("#666666")
         strokeWidth = 3f
+    }
+    private val middleRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = Color.parseColor("#555555")
+        strokeWidth = 2f
     }
     private val innerRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        color = Color.parseColor("#2E88D9")
-        strokeWidth = 1.5f
-        alpha = 70
+        color = Color.parseColor("#444444")
+        strokeWidth = 2f
     }
-    private val knobPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val knobRimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        color = Color.parseColor("#5CB2FF")
-        strokeWidth = 2.5f
+    private val knobPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.parseColor("#888888")
     }
     private val texturePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#4A5058")
+        color = Color.parseColor("#AAAAAA")
         style = Paint.Style.FILL
         strokeWidth = 3f
         strokeCap = Paint.Cap.ROUND
@@ -83,30 +83,20 @@ class JoystickView @JvmOverloads constructor(
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        val cx = w / 2f
-        val cy = h / 2f
         val outerR = min(w, h) / 2f
         maxRadius = outerR * 0.55f
 
-        basePaint.shader = RadialGradient(
-            cx, cy, outerR,
-            intArrayOf(Color.parseColor("#20242B"), Color.parseColor("#0C0E12")),
-            floatArrayOf(0f, 1f),
-            Shader.TileMode.CLAMP
-        )
-        glowPaint.strokeWidth = outerR * 0.07f
-        glowPaint.maskFilter = BlurMaskFilter(outerR * 0.22f, BlurMaskFilter.Blur.NORMAL)
+        knobX = w / 2f
+        knobY = h / 2f
 
-        knobX = cx
-        knobY = cy
-
-        val knobR = outerR * 0.95f * 0.42f
+        // Knob radius ~44% of the outer ring, matching the reference's
+        // 70px-cap-in-160px-view ratio (70/160 = 0.4375).
+        val knobR = outerR * 0.95f * 0.44f
         buildTextureDots(knobR)
     }
 
-    /** Small hex-ish dot grid inside the knob radius, for a tactile grip texture. */
+    /** Small dot grid inside the knob radius, for a tactile grip texture. */
     private fun buildTextureDots(knobR: Float) {
-        knobRadiusCache = knobR
         val spacing = knobR * 0.34f
         val usableR = knobR * 0.72f
         val pts = mutableListOf<Float>()
@@ -133,23 +123,14 @@ class JoystickView @JvmOverloads constructor(
         val cy = height / 2f
         val outerR = min(width, height) / 2f * 0.95f
 
-        // Soft outer glow, stronger while actively held.
-        glowPaint.alpha = if (pressed) 200 else 110
-        canvas.drawCircle(cx, cy, outerR, glowPaint)
+        // Three thin concentric ring outlines, no fill - matches the
+        // reference's flat/minimal stick base (no dark gradient disc).
+        outerRingPaint.alpha = if (pressed) 255 else 200
+        canvas.drawCircle(cx, cy, outerR, outerRingPaint)
+        canvas.drawCircle(cx, cy, outerR * 0.6f, middleRingPaint)
+        canvas.drawCircle(cx, cy, outerR * 0.3f, innerRingPaint)
 
-        canvas.drawCircle(cx, cy, outerR, basePaint)
-        canvas.drawCircle(cx, cy, outerR * 0.74f, innerRingPaint)
-
-        ringPaint.alpha = if (pressed) 255 else 150
-        canvas.drawCircle(cx, cy, outerR - 4f, ringPaint)
-
-        val knobR = outerR * 0.42f
-        knobPaint.shader = RadialGradient(
-            knobX - knobR * 0.3f, knobY - knobR * 0.3f, knobR * 1.6f,
-            intArrayOf(Color.parseColor("#3A4048"), Color.parseColor("#15171B")),
-            floatArrayOf(0f, 1f),
-            Shader.TileMode.CLAMP
-        )
+        val knobR = outerR * 0.44f
         canvas.drawCircle(knobX, knobY, knobR, knobPaint)
 
         // Tactile dot texture, clipped to the knob.
@@ -160,9 +141,6 @@ class JoystickView @JvmOverloads constructor(
             canvas.drawPoints(textureDots, texturePaint)
             canvas.restore()
         }
-
-        knobRimPaint.alpha = if (pressed) 255 else 210
-        canvas.drawCircle(knobX, knobY, knobR - 1.5f, knobRimPaint)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {

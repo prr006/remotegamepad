@@ -13,4 +13,10 @@
     <PackageReference Include="QRCoder" Version="1.8.0" />
   </ItemGroup>
 
+  <ItemGroup>
+  <Compile Remove="tests\**" />
+  <EmbeddedResource Remove="tests\**" />
+  <None Remove="tests\**" />
+</ItemGroup>
+
 </Project>

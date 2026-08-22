@@ -28,6 +28,7 @@ class Program
 
     static int playerCount = 0;
 
+<<<<<<< ours
     // Digital buttons carried in a STATE mask, bit position = index here.
     // MUST stay in sync with Android's ButtonState.ORDER.
     // NOTE: D-pad (bits 11-14) is handled separately via SetDPadDirection(),
@@ -47,9 +48,94 @@ class Program
         (10, Xbox360Button.Guide),
         // Bits 11-14 (DPAD_UP/DOWN/LEFT/RIGHT) are intentionally omitted -
         // they are handled via SetDPadDirection() below.
+=======
+    // ================= EXPLICIT PROTOCOL-KEY -> OUTPUT MAPPING =================
+    // Single source of truth for every digital/trigger control. Every
+    // protocol key (the string before _DOWN/_UP, and the same name used
+    // conceptually by Android's ButtonState.ORDER for STATE packets) maps
+    // to exactly one Xbox360 output here, keyed by name - never by array
+    // index, bit-shift-from-neighbor, or enumeration order. Both the
+    // low-latency _DOWN/_UP edge path and the STATE heartbeat resync path
+    // read from this SAME dictionary (see InputMap.TryGetValue in
+    // HandleInput, and ApplyButtonMask below), so there is no
+    // second, independently-maintained table that could drift out of
+    // sync and cause one control to resolve to another control's output.
+    //
+    // StateBit is only used for decoding a STATE packet's mask field and
+    // must stay in sync with Android's ButtonState.ORDER (see
+    // ButtonState.kt) - matched here by key NAME, not by position, so a
+    // reordering on either side is a visible mismatch rather than a
+    // silent cross-wire.
+    internal enum ControlKind { Button, Slider }
+
+    internal sealed class InputMapping
+    {
+        public readonly string Key;
+        public readonly ControlKind Kind;
+        public readonly Xbox360Button Button;
+        public readonly Xbox360Slider Slider;
+        public readonly int StateBit;
+
+        private InputMapping(string key, ControlKind kind, Xbox360Button button, Xbox360Slider slider, int stateBit)
+        {
+            Key = key;
+            Kind = kind;
+            Button = button;
+            Slider = slider;
+            StateBit = stateBit;
+        }
+
+        public static InputMapping ForButton(string key, Xbox360Button button, int stateBit) =>
+            new InputMapping(key, ControlKind.Button, button, default, stateBit);
+
+        public static InputMapping ForSlider(string key, Xbox360Slider slider, int stateBit) =>
+            new InputMapping(key, ControlKind.Slider, default, slider, stateBit);
+
+        // Applies this control's press/release state to the controller.
+        // This is the ONLY place that writes Key's mapped output, and it
+        // is used identically by both the edge path and the STATE path -
+        // there is no per-call-site duplication of the button/slider
+        // choice that the two paths could disagree on.
+        public void Apply(IXbox360Controller controller, bool pressed)
+        {
+            switch (Kind)
+            {
+                case ControlKind.Button:
+                    controller.SetButtonState(Button, pressed);
+                    break;
+                case ControlKind.Slider:
+                    controller.SetSliderValue(Slider, pressed ? (byte)255 : (byte)0);
+                    break;
+            }
+        }
+
+        public string Describe() => Kind == ControlKind.Button
+            ? $"Xbox360Button.{Button}"
+            : $"Xbox360Slider.{Slider}";
+    }
+
+    internal static readonly Dictionary<string, InputMapping> InputMap = new Dictionary<string, InputMapping>
+    {
+        ["A"] = InputMapping.ForButton("A", Xbox360Button.A, 0),
+        ["B"] = InputMapping.ForButton("B", Xbox360Button.B, 1),
+        ["X"] = InputMapping.ForButton("X", Xbox360Button.X, 2),
+        ["Y"] = InputMapping.ForButton("Y", Xbox360Button.Y, 3),
+        ["LB"] = InputMapping.ForButton("LB", Xbox360Button.LeftShoulder, 4),
+        ["RB"] = InputMapping.ForButton("RB", Xbox360Button.RightShoulder, 5),
+        ["LS"] = InputMapping.ForButton("LS", Xbox360Button.LeftThumb, 6),
+        ["RS"] = InputMapping.ForButton("RS", Xbox360Button.RightThumb, 7),
+        ["START"] = InputMapping.ForButton("START", Xbox360Button.Start, 8),
+        ["SELECT"] = InputMapping.ForButton("SELECT", Xbox360Button.Back, 9),
+        ["HOME"] = InputMapping.ForButton("HOME", Xbox360Button.Guide, 10),
+        ["DPAD_UP"] = InputMapping.ForButton("DPAD_UP", Xbox360Button.Up, 11),
+        ["DPAD_DOWN"] = InputMapping.ForButton("DPAD_DOWN", Xbox360Button.Down, 12),
+        ["DPAD_LEFT"] = InputMapping.ForButton("DPAD_LEFT", Xbox360Button.Left, 13),
+        ["DPAD_RIGHT"] = InputMapping.ForButton("DPAD_RIGHT", Xbox360Button.Right, 14),
+        ["LT"] = InputMapping.ForSlider("LT", Xbox360Slider.LeftTrigger, 15),
+        ["RT"] = InputMapping.ForSlider("RT", Xbox360Slider.RightTrigger, 16),
+>>>>>>> theirs
     };
-    const int LtBit = 15;
-    const int RtBit = 16;
+    // =============== END EXPLICIT PROTOCOL-KEY -> OUTPUT MAPPING ===============
 
     // Per-player D-pad state tracking for proper POV/HAT axis handling.
     // Xbox 360 D-pad uses 8 directions (None, N, NE, E, SE, S, SW, W, NW).
@@ -94,6 +180,56 @@ class Program
     // than just gated, since those were the actual volume source.
     const bool DiagEnabled = false;
 
+    // TEMPORARY INPUT-MAPPING DIAGNOSTIC (separate from the axis diagnostic
+    // above - this one is cheap since it only fires on the disputed digital
+    // controls plus the low-rate STATE heartbeat, never on joystick
+    // packets). Logs the exact RX payload and the exact ViGEm call made
+    // for it, so a capture of one press of each control gives a direct
+    // [SERVER RX] -> [MAP] -> actual-value comparison against the Android
+    // [INPUT]/[SEND] logs. Flip to false once the mismatch (if any) is
+    // confirmed and fixed.
+    const bool InputDiagEnabled = true;
+    static readonly HashSet<string> InputDiagKeys = new HashSet<string>
+        { "HOME", "DPAD_UP", "DPAD_DOWN", "DPAD_LEFT", "DPAD_RIGHT", "LT", "RT" };
+
+    // Narrow runtime lifecycle trace. This intentionally observes only the
+    // report fields disputed by the current investigation and emits no
+    // per-joystick-packet traffic. It identifies the in-process controller
+    // object and ViGEm user index that actually receives each report.
+    const bool ControllerLifecycleDiagEnabled = true;
+    static readonly HashSet<string> ControllerTraceKeys = new HashSet<string>
+        { "A", "DPAD_UP", "DPAD_DOWN", "DPAD_LEFT", "DPAD_RIGHT", "HOME", "LT", "RT" };
+    static int nextControllerInstanceId;
+
+    readonly struct ControllerReportSnapshot
+    {
+        public readonly ushort Buttons;
+        public readonly byte LeftTrigger;
+        public readonly byte RightTrigger;
+
+        public ControllerReportSnapshot(ushort buttons, byte leftTrigger, byte rightTrigger)
+        {
+            Buttons = buttons;
+            LeftTrigger = leftTrigger;
+            RightTrigger = rightTrigger;
+        }
+
+        public ControllerReportSnapshot(IXbox360Controller controller)
+        {
+            Buttons = controller.ButtonState;
+            LeftTrigger = controller.LeftTrigger;
+            RightTrigger = controller.RightTrigger;
+        }
+
+        public bool Equals(ControllerReportSnapshot other) =>
+            Buttons == other.Buttons &&
+            LeftTrigger == other.LeftTrigger &&
+            RightTrigger == other.RightTrigger;
+
+        public override string ToString() =>
+            $"wButtons=0x{Buttons:X4} lt={LeftTrigger} rt={RightTrigger}";
+    }
+
     static void Diag(PlayerConnection player, string msg)
     {
         if (!DiagEnabled) return;
@@ -136,6 +272,15 @@ class Program
     class PlayerConnection
     {
         public IXbox360Controller Controller;
+
+        // Assigned once when this exact ViGEm controller object is created.
+        // Unlike an object hash it is monotonically unique for this process.
+        public int ControllerInstanceId;
+        public int ControllerUserIndex;
+        // Set only after Connect() returns without throwing for this object.
+        public bool ControllerConnectSucceeded;
+        public bool HasLastSubmittedReport;
+        public ControllerReportSnapshot LastSubmittedReport;
 
         // TEMP DIAGNOSTIC: remote endpoint string, purely for tagging log
         // lines - set once at creation, never mutated.
@@ -182,6 +327,77 @@ class Program
 
         // Per-player D-pad state for proper POV/HAT axis handling.
         public DPadState DPad = new DPadState();
+    }
+
+    static ControllerReportSnapshot ExpectedReportAfterInput(
+        string input,
+        bool pressed,
+        ControllerReportSnapshot before)
+    {
+        ushort bit = input switch
+        {
+            "A" => 0x1000,
+            "DPAD_UP" => 0x0001,
+            "DPAD_DOWN" => 0x0002,
+            "DPAD_LEFT" => 0x0004,
+            "DPAD_RIGHT" => 0x0008,
+            "HOME" => 0x0400,
+            _ => 0
+        };
+
+        ushort buttons = bit == 0
+            ? before.Buttons
+            : pressed ? (ushort)(before.Buttons | bit) : (ushort)(before.Buttons & ~bit);
+        byte leftTrigger = input == "LT" ? (pressed ? (byte)255 : (byte)0) : before.LeftTrigger;
+        byte rightTrigger = input == "RT" ? (pressed ? (byte)255 : (byte)0) : before.RightTrigger;
+        return new ControllerReportSnapshot(buttons, leftTrigger, rightTrigger);
+    }
+
+    static void TraceReportMutation(
+        PlayerConnection player,
+        string input,
+        bool pressed,
+        ControllerReportSnapshot before,
+        ControllerReportSnapshot after)
+    {
+        if (!ControllerLifecycleDiagEnabled || !ControllerTraceKeys.Contains(input)) return;
+        var expected = ExpectedReportAfterInput(input, pressed, before);
+        Console.WriteLine(
+            $"[CTRL MUTATE] player={player.PlayerId} instance={player.ControllerInstanceId} " +
+            $"userIndex={player.ControllerUserIndex} input={input} pressed={pressed} " +
+            $"before({before}) expected({expected}) actual({after}) match={expected.Equals(after)}");
+    }
+
+    static int GetControllerUserIndex(IXbox360Controller controller)
+    {
+        try { return controller.UserIndex; }
+        catch { return -1; } // diagnostic identity remains available via instance ID
+    }
+
+    // Every SubmitReport call goes through here. It prints either an
+    // explicitly traced control or a later submission that changes the
+    // button/trigger report fields, making a stale overwrite visible without
+    // producing high-rate joystick logging.
+    static void SubmitReport(PlayerConnection player, string source, bool forceTrace = false)
+    {
+        var report = new ControllerReportSnapshot(player.Controller);
+        bool changed = !player.HasLastSubmittedReport || !report.Equals(player.LastSubmittedReport);
+        if (ControllerLifecycleDiagEnabled && (forceTrace || changed))
+        {
+            Console.WriteLine(
+                $"[CTRL BEFORE SUBMIT] player={player.PlayerId} instance={player.ControllerInstanceId} " +
+                $"userIndex={player.ControllerUserIndex} source={source} report({report}) changed={changed}");
+        }
+
+        player.Controller.SubmitReport();
+        if (ControllerLifecycleDiagEnabled && (forceTrace || changed))
+        {
+            Console.WriteLine(
+                $"[CTRL SUBMIT OK] player={player.PlayerId} instance={player.ControllerInstanceId} " +
+                $"userIndex={player.ControllerUserIndex} source={source} connectedAtCreation={player.ControllerConnectSucceeded}");
+        }
+        player.LastSubmittedReport = report;
+        player.HasLastSubmittedReport = true;
     }
 
     static void Main()
@@ -270,10 +486,30 @@ class Program
                 var controller = vigemClient.CreateXbox360Controller();
                 controller.Connect();
 
-                player = new PlayerConnection { Controller = controller, PlayerId = playerId };
+                player = new PlayerConnection
+                {
+                    Controller = controller,
+                    PlayerId = playerId,
+                    ControllerInstanceId = Interlocked.Increment(ref nextControllerInstanceId),
+                    ControllerUserIndex = GetControllerUserIndex(controller),
+                    ControllerConnectSucceeded = true
+                };
                 players[playerId] = player;
 
                 Console.WriteLine($"🎮 Player {playerCount} connected ({playerId}) — TEMP DIAGNOSTIC: total tracked players now = {players.Count}");
+                if (ControllerLifecycleDiagEnabled)
+                {
+                    string activeControllers = string.Join(
+                        ", ",
+                        players.Values.Select(p =>
+                            $"{p.PlayerId}|instance={p.ControllerInstanceId}|userIndex={p.ControllerUserIndex}"));
+                    Console.WriteLine(
+                        $"[CTRL CREATE] player={player.PlayerId} instance={player.ControllerInstanceId} " +
+                        $"userIndex={player.ControllerUserIndex} object={controller.GetHashCode()} " +
+                        $"connectSucceeded={player.ControllerConnectSucceeded} " +
+                        $"report({new ControllerReportSnapshot(controller)}) trackedPlayers={players.Count} " +
+                        $"active=[{activeControllers}]");
+                }
                 if (DiagEnabled)
                 {
                     Diag(player, $"PLAYER CREATED ctrl={controller.GetHashCode()} totalPlayers={players.Count}");
@@ -426,7 +662,17 @@ class Program
                 if (read == 0)
                     break; // remote end closed the stream cleanly
 
-                pending += Encoding.UTF8.GetString(readBuffer, 0, read);
+                string chunk = Encoding.UTF8.GetString(readBuffer, 0, read);
+                if (InputDiagEnabled)
+                {
+                    // Raw bytes exactly as they arrived off the socket, before
+                    // any newline-framing/parsing is applied. A stream.Read()
+                    // can land mid-message, so this may show a partial line -
+                    // that's expected and fine; what matters is confirming
+                    // bytes are arriving here at all, and what they contain.
+                    Console.WriteLine($"[BT RAW RX] {read} bytes: \"{chunk.Replace("\n", "\\n").Replace("\r", "\\r")}\"");
+                }
+                pending += chunk;
 
                 // RFCOMM is a byte stream with no message boundaries of its
                 // own, so split on the '\n' framing BluetoothClient.kt adds
@@ -446,13 +692,25 @@ class Program
                     if (message.Length == 0)
                         continue;
 
+                    // JOY_ traffic is intentionally excluded from this log -
+                    // it's high-frequency (~90Hz per stick) and logging it
+                    // here would reproduce the exact console-spam problem
+                    // the (now-disabled) per-packet axis diagnostic above
+                    // was removed for. Every BUTTON/STATE message - which is
+                    // what we're actually trying to prove or disprove is
+                    // arriving - is still logged in full.
+                    if (InputDiagEnabled && !message.StartsWith("JOY_"))
+                    {
+                        Console.WriteLine($"[BT MSG] \"{message}\"");
+                    }
+
                     PlayerConnection player = GetOrCreatePlayer(playerId);
                     MarkAlive(player);
                     HandleInput(message, player);
                 }
             }
         }
-        catch (Exception)
+        catch (Exception e)
         {
             // Stream errored out (radio dropped out of range, phone app
             // killed, etc). Deliberately NOT doing any release/removal
@@ -462,6 +720,18 @@ class Program
             // as it does for a UDP connection that silently stops sending.
             // A Bluetooth disconnect is just left to go stale the same
             // way, instead of duplicating that cleanup/failsafe logic here.
+            //
+            // This WAS a bare `catch (Exception)` that discarded the
+            // exception entirely - if the read loop died for any reason
+            // (malformed stream state, an exception thrown while handling
+            // a still-in-flight message, etc.) there was previously no way
+            // to see it happened at all; it looked identical to a clean
+            // disconnect. Logging it here is diagnostic-only - it doesn't
+            // change the deliberate "don't clean up here" behavior above.
+            if (InputDiagEnabled)
+            {
+                Console.WriteLine($"[BT ERROR] read loop threw: {e}");
+            }
         }
         finally
         {
@@ -487,13 +757,30 @@ class Program
 
                 string key = data.Substring(0, data.LastIndexOf('_'));
 
+<<<<<<< ours
                 // ===== TEMPORARY DIAGNOSTIC LOGGING =====
                 Console.WriteLine($"[SERVER_DIAG] MAP {key} pressed={pressed}");
+=======
+                if (InputDiagEnabled && InputDiagKeys.Contains(key))
+                {
+                    Console.WriteLine($"[SERVER RX] {data}  (parsed key=\"{key}\" pressed={pressed})");
+                }
+>>>>>>> theirs
 
                 lock (player.Lock)
                 {
-                    switch (key)
+                    bool traceControl = ControllerTraceKeys.Contains(key);
+                    var before = traceControl ? new ControllerReportSnapshot(controller) : default;
+
+                    // Single explicit lookup into InputMap - the ONE
+                    // table shared with ApplyButtonMask (STATE heartbeat)
+                    // below. No switch/positional/next-bit logic here: an
+                    // unrecognized key is simply not in the dictionary
+                    // and is ignored, exactly like the old switch's
+                    // default (no-match) fallthrough.
+                    if (InputMap.TryGetValue(key, out var mapping))
                     {
+<<<<<<< ours
                         case "A":
                             controller.SetButtonState(Xbox360Button.A, pressed);
                             Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(A, {pressed})");
@@ -588,9 +875,20 @@ class Program
                             );
                             Console.WriteLine($"[SERVER_DIAG] VIGEM SetSliderValue(RightTrigger, {(pressed ? 255 : 0)})");
                             break;
+=======
+                        if (InputDiagEnabled && InputDiagKeys.Contains(key))
+                        {
+                            Console.WriteLine($"[MAP] {key} -> {mapping.Describe()} pressed={pressed}");
+                        }
+                        mapping.Apply(controller, pressed);
+>>>>>>> theirs
                     }
 
-                    controller.SubmitReport();
+                    if (traceControl)
+                    {
+                        TraceReportMutation(player, key, pressed, before, new ControllerReportSnapshot(controller));
+                    }
+                    SubmitReport(player, $"edge:{key}", traceControl);
                 }
             }
 
@@ -670,7 +968,7 @@ class Program
                         axisLogged |= DiagAxis(player, "RightThumbY", joyY, ref player.DiagLastRightY, "JOY_R", joySeq);
                     }
 
-                    controller.SubmitReport();
+                    SubmitReport(player, $"joy:{tag}:{joySeq}");
 
                     if (axisLogged)
                     {
@@ -698,11 +996,22 @@ class Program
                 if (!int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out int mask))
                     return;
 
+<<<<<<< ours
                 // ===== TEMPORARY DIAGNOSTIC LOGGING =====
                 Console.WriteLine($"[SERVER_DIAG] RX STATE seq={seq} mask={mask}");
                 for (int i = 10; i <= 16; i++)
                 {
                     Console.WriteLine($"[SERVER_DIAG] STATE bit {i}={(mask & (1 << i)) != 0}");
+=======
+                if (InputDiagEnabled)
+                {
+                    Console.WriteLine(
+                        $"[SERVER STATE] raw=\"{data}\" mask={mask} binary={Convert.ToString(mask, 2).PadLeft(17, '0')} " +
+                        $"HOME={(mask >> InputMap["HOME"].StateBit) & 1} UP={(mask >> InputMap["DPAD_UP"].StateBit) & 1} " +
+                        $"DOWN={(mask >> InputMap["DPAD_DOWN"].StateBit) & 1} " +
+                        $"LEFT={(mask >> InputMap["DPAD_LEFT"].StateBit) & 1} RIGHT={(mask >> InputMap["DPAD_RIGHT"].StateBit) & 1} " +
+                        $"LT={(mask >> InputMap["LT"].StateBit) & 1} RT={(mask >> InputMap["RT"].StateBit) & 1}");
+>>>>>>> theirs
                 }
 
                 // STATE:seq:mask:leftX,leftY:rightX,rightY
@@ -749,7 +1058,19 @@ class Program
 
                     player.LastStateSeq = seq;
 
+<<<<<<< ours
                     ApplyButtonMask(controller, mask, player.DPad);
+=======
+                    var before = new ControllerReportSnapshot(controller);
+                    ApplyButtonMask(controller, mask);
+                    var after = new ControllerReportSnapshot(controller);
+                    if (!before.Equals(after))
+                    {
+                        Console.WriteLine(
+                            $"[CTRL STATE MUTATE] player={player.PlayerId} instance={player.ControllerInstanceId} " +
+                            $"userIndex={player.ControllerUserIndex} seq={seq} before({before}) after({after})");
+                    }
+>>>>>>> theirs
 
                     // JOYSTICK AUTHORITY: JOY_L/JOY_R are now the ONLY
                     // packets allowed to write LeftThumbX/Y and
@@ -765,16 +1086,27 @@ class Program
                     // JOY_L zero packet and re-stick the axis at its old
                     // position. Giving each axis exactly one writer removes
                     // that race entirely.
-                    controller.SubmitReport();
+                    SubmitReport(player, $"state:{seq}");
                 }
             }
         }
-        catch
+        catch (Exception e)
         {
-            // Ignore malformed packets
+            // Was a bare `catch { }` that discarded the exception entirely -
+            // if a message reached here and threw partway through parsing
+            // (STATE, JOY_, or a *_DOWN/*_UP switch case), it vanished
+            // silently and looked identical to a message that never arrived
+            // at all, from the outside. This is diagnostic-only: still
+            // swallows the exception and moves on exactly as before, just
+            // now visible when INPUT_DIAG is on.
+            if (InputDiagEnabled)
+            {
+                Console.WriteLine($"[PARSE ERROR] data=\"{data}\" -> {e.GetType().Name}: {e.Message}");
+            }
         }
     }
 
+<<<<<<< ours
     static void ApplyButtonMask(IXbox360Controller controller, int mask, DPadState dpad)
     {
         // ===== TEMPORARY DIAGNOSTIC LOGGING =====
@@ -802,6 +1134,23 @@ class Program
         controller.SetSliderValue(Xbox360Slider.RightTrigger, rtVal);
         Console.WriteLine($"[SERVER_DIAG] VIGEM SetSliderValue(LeftTrigger, {ltVal}) [bit {LtBit}]");
         Console.WriteLine($"[SERVER_DIAG] VIGEM SetSliderValue(RightTrigger, {rtVal}) [bit {RtBit}]");
+=======
+    // STATE heartbeat reconstruction. Uses the SAME InputMap dictionary as
+    // the _DOWN/_UP edge path above (via mapping.Apply) - there is no
+    // separate positional array here, so this cannot resolve one control
+    // using another control's mapping.
+    static void ApplyButtonMask(IXbox360Controller controller, int mask)
+    {
+        foreach (var mapping in InputMap.Values)
+        {
+            bool pressed = (mask & (1 << mapping.StateBit)) != 0;
+            if (InputDiagEnabled && mapping.StateBit >= 10 && mapping.StateBit <= 14)
+            {
+                Console.WriteLine($"[MAP STATE] bit={mapping.StateBit} -> {mapping.Describe()} pressed={pressed}");
+            }
+            mapping.Apply(controller, pressed);
+        }
+>>>>>>> theirs
     }
 
     static void ApplyJoystickState(
@@ -890,7 +1239,7 @@ class Program
                         axisLoggedL |= DiagAxis(player, "LeftThumbX", 0, ref player.DiagLastLeftX, "stick timeout", player.LastJoyLSeq);
                         axisLoggedL |= DiagAxis(player, "LeftThumbY", 0, ref player.DiagLastLeftY, "stick timeout", player.LastJoyLSeq);
                         player.LeftStickExpired = true;
-                        player.Controller.SubmitReport();
+                        SubmitReport(player, "stick-timeout:L");
                         if (axisLoggedL)
                         {
                             Console.WriteLine(
@@ -908,7 +1257,7 @@ class Program
                         axisLoggedR |= DiagAxis(player, "RightThumbX", 0, ref player.DiagLastRightX, "stick timeout", player.LastJoyRSeq);
                         axisLoggedR |= DiagAxis(player, "RightThumbY", 0, ref player.DiagLastRightY, "stick timeout", player.LastJoyRSeq);
                         player.RightStickExpired = true;
-                        player.Controller.SubmitReport();
+                        SubmitReport(player, "stick-timeout:R");
                         if (axisLoggedR)
                         {
                             Console.WriteLine(
@@ -1016,11 +1365,15 @@ class Program
             Console.WriteLine($"[{Environment.TickCount64}] [ReleaseAll] ctrl={controller.GetHashCode()}");
         }
 
-        foreach (var (_, button) in MaskButtons)
+        // Same InputMap table as everywhere else - releasing "false"
+        // through mapping.Apply sets buttons to released and sliders to 0,
+        // so there is no separate button-array/slider-pair to keep in sync.
+        foreach (var mapping in InputMap.Values)
         {
-            controller.SetButtonState(button, false);
+            mapping.Apply(controller, false);
         }
 
+<<<<<<< ours
         // Release D-pad to neutral
         if (player != null)
         {
@@ -1038,6 +1391,8 @@ class Program
         controller.SetSliderValue(Xbox360Slider.LeftTrigger, 0);
         controller.SetSliderValue(Xbox360Slider.RightTrigger, 0);
 
+=======
+>>>>>>> theirs
         controller.SetAxisValue(Xbox360Axis.LeftThumbX, 0);
         controller.SetAxisValue(Xbox360Axis.LeftThumbY, 0);
         controller.SetAxisValue(Xbox360Axis.RightThumbX, 0);
@@ -1052,7 +1407,14 @@ class Program
             axisLogged |= DiagAxis(player, "RightThumbY", 0, ref player.DiagLastRightY, "connection failsafe", player.LastJoyRSeq);
         }
 
-        controller.SubmitReport();
+        if (player != null)
+        {
+            SubmitReport(player, "release-all");
+        }
+        else
+        {
+            controller.SubmitReport();
+        }
 
         if (axisLogged)
         {
