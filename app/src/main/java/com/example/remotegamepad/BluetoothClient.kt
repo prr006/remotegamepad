@@ -240,24 +240,12 @@ class BluetoothClient : GamepadTransport {
         leftY: Float,
         rightX: Float,
         rightY: Float
-<<<<<<< HEAD
-    ): ByteArray {
-        // ===== TEMPORARY DIAGNOSTIC LOGGING =====
-        val bits = StringBuilder()
-        for (i in 10..16) {
-            bits.append("bit $i=${if ((mask and (1 shl i)) != 0) "1" else "0"} ")
-        }
-        Log.d("ANDROID_DIAG", "STATE mask=$mask $bits")
-        
-        return "STATE:$seq:${mask}:$leftX,$leftY:$rightX,$rightY"
-=======
     ): ByteArray =
         // See SocketClient.encodeState's identical fix: ButtonState.ORDER
         // uses bits 0-16 (RT = bit 16), so 0xFFFF (bits 0-15 only) was
         // dropping RT from every STATE resync packet. 0x1FFFF covers all
         // 17 tracked bits.
         "STATE:$seq:${mask and 0x1FFFF}:$leftX,$leftY:$rightX,$rightY"
->>>>>>> qwen-rt-fix
             .toByteArray(Charsets.US_ASCII)
     }
 
