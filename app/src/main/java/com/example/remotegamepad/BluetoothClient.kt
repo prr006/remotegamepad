@@ -237,7 +237,11 @@ class BluetoothClient : GamepadTransport {
         rightX: Float,
         rightY: Float
     ): ByteArray =
-        "STATE:$seq:${mask and 0xFFFF}:$leftX,$leftY:$rightX,$rightY"
+        // See SocketClient.encodeState's identical fix: ButtonState.ORDER
+        // uses bits 0-16 (RT = bit 16), so 0xFFFF (bits 0-15 only) was
+        // dropping RT from every STATE resync packet. 0x1FFFF covers all
+        // 17 tracked bits.
+        "STATE:$seq:${mask and 0x1FFFF}:$leftX,$leftY:$rightX,$rightY"
             .toByteArray(Charsets.US_ASCII)
 
     override fun close() {

@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "dgSpecHash": "IWS2Jpdo3M0=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\Rahul\\Downloads\\RemoteGamepad-main-updated\\RemoteGamepad-main\\Server\\GamepadServer.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\Rahul\\.nuget\\packages\\inthehand.net.bluetooth\\4.2.4\\inthehand.net.bluetooth.4.2.4.nupkg.sha512",
+    "C:\\Users\\Rahul\\.nuget\\packages\\linux.bluetooth\\5.67.1\\linux.bluetooth.5.67.1.nupkg.sha512",
+    "C:\\Users\\Rahul\\.nuget\\packages\\microsoft.win32.systemevents\\6.0.0\\microsoft.win32.systemevents.6.0.0.nupkg.sha512",
+    "C:\\Users\\Rahul\\.nuget\\packages\\nefarius.vigem.client\\1.21.256\\nefarius.vigem.client.1.21.256.nupkg.sha512",
+    "C:\\Users\\Rahul\\.nuget\\packages\\qrcoder\\1.8.0\\qrcoder.1.8.0.nupkg.sha512",
+    "C:\\Users\\Rahul\\.nuget\\packages\\system.drawing.common\\6.0.0\\system.drawing.common.6.0.0.nupkg.sha512",
+    "C:\\Users\\Rahul\\.nuget\\packages\\tmds.dbus\\0.20.0\\tmds.dbus.0.20.0.nupkg.sha512"
+  ],
+  "logs": [
+    {
+      "code": "NU1903",
+      "level": "Warning",
+      "message": "Package 'Tmds.DBus' 0.20.0 has a known high severity vulnerability, https://github.com/advisories/GHSA-xrw6-gwf8-vvr9",
+      "projectPath": "C:\\Users\\Rahul\\Downloads\\RemoteGamepad-main-updated\\RemoteGamepad-main\\Server\\GamepadServer.csproj",
+      "warningLevel": 1,
+      "filePath": "C:\\Users\\Rahul\\Downloads\\RemoteGamepad-main-updated\\RemoteGamepad-main\\Server\\GamepadServer.csproj",
+      "libraryId": "Tmds.DBus",
+      "targetGraphs": [
+        "net10.0"
+      ]
+    }
+  ]
+}

@@ -9,124 +9,237 @@
     android:keepScreenOn="true">
 
     <!--
-      V8 — All sizes and positions derived directly from reference screenshot
-      (1536×768 = 2:1 aspect ratio). No arbitrary adjustments.
+      V9 — Redesigned to match the supplied JSX visual reference
+      (minimalist dark controller, thin outlines, edge-anchored control
+      groups, large clear center gameplay area) while keeping every id,
+      view class, and GamepadActivity wiring from V8 unchanged.
 
-      METHODOLOGY:
-        1. Measured pixel centers from the reference image.
-        2. Converted to fractions of 1536 (x) and 768 (y).
-        3. Applied the EXACT ConstraintLayout bias formula:
-             For 1:1 views  (h_pct P on screen W×H, W=2H):
-               view_width_pct = P/2
-               H_bias = (cx_frac - P/4)  / (1 - P/2)
-               V_bias = (cy_frac - P/2)  / (1 - P)
-             For ShoulderButtonView (independent w_pct, h_pct):
-               H_bias = (cx_frac - w_pct/2) / (1 - w_pct)
-               V_bias = (cy_frac - h_pct/2) / (1 - h_pct)
+      All 19 control positions were generated + collision/clipping
+      checked programmatically (circle-vs-circle distance test, min 14px
+      gap, against a 1536x768 = 2:1 landscape reference) rather than
+      hand-measured — see the accompanying layout_calc.py used to derive
+      these bias values. No two controls overlap and nothing clips a
+      screen edge at these values.
 
-      All 19 control positions verified against reference image coordinates.
-      All 25 GamepadActivity.kt IDs present, zero duplicates.
+      Formula used (1:1 square view, height_percent P, on a 2:1 W=2H screen):
+        width_px = height_px = P * H
+        H_bias = (cx_px - P*H/2) / (W - P*H)
+        V_bias = (cy_px - P*H/2) / (H - P*H)
 
-      CONTROL SIZES (measured from 1536×768 reference):
-        ShoulderButtonView: w=0.085  h=0.130   (130×100px in reference)
-        RoundButtonView (D-pad): h_pct=0.122   (~94px diameter)
-        RoundButtonView (ABXY):  h_pct=0.143   (~110px diameter)
-        RoundButtonView (L3/R3): h_pct=0.124   (~95px diameter)
-        RoundButtonView (View/Menu): h_pct=0.10
-        RoundButtonView (Home):  h_pct=0.12
-        JoystickView:  h_pct=0.28  (~200px visual ring on 768px screen)
+      SIZES (as height_percent):
+        Shoulder (LT/LB/RB/RT):        0.1302  — now circular, same size
+                                                  as D-pad/ABXY (JSX uses a
+                                                  uniform circular size for
+                                                  all of these, not a larger
+                                                  distinct shoulder shape)
+        D-pad / ABXY buttons:           0.1302  — unified size (JSX draws
+                                                  these the same size)
+        L3 / R3:                        0.1250
+        Home:                           0.1250
+        View / Menu:                    0.1016
+        JoystickView:                   0.2995  — enlarged from V8's 0.28
+                                                  to better fill the screen
+                                                  per the "use the whole
+                                                  landscape screen" brief
 
-      REFERENCE CENTER POSITIONS (x%, y%) → BIAS VALUES:
-        LT  (4.6%, 15.0%) → h=0.004 v=0.098
-        LB  (13.0%,15.0%) → h=0.091 v=0.098
-        RB  (87.0%,15.0%) → h=0.864 v=0.098
-        RT  (95.4%,15.0%) → h=0.952 v=0.098
-        View(38.3%, 6.1%) → h=0.377 v=0.012
-        Home(46.0%, 6.1%) → h=0.457 v=0.001
-        Menu(53.3%, 6.1%) → h=0.535 v=0.012
-        DUp ( 8.7%,28.9%) → h=0.060 v=0.260
-        DLft( 3.9%,40.4%) → h=0.009 v=0.391
-        DRt (13.5%,40.4%) → h=0.111 v=0.391
-        DDn ( 8.7%,51.8%) → h=0.060 v=0.521
-        Y   (78.3%,28.6%) → h=0.805 v=0.250
-        X   (72.4%,40.4%) → h=0.741 v=0.388
-        B   (85.3%,40.4%) → h=0.880 v=0.388
-        A   (78.3%,52.1%) → h=0.805 v=0.525
-        LJS (22.1%,65.1%) → h=0.176 v=0.710
-        RJS (68.5%,65.1%) → h=0.715 v=0.710
-        L3  ( 4.2%,91.1%) → h=0.012 v=0.969
-        R3  (95.8%,91.1%) → h=0.988 v=0.969
+      CENTERS (x%, y% of screen):
+        LT (5.2,15.5)  LB (14.8,15.5)  RB (85.2,15.5)  RT (94.8,15.5)
+        View(38.3,8.5) Home(46.0,9.0)  Menu(53.5,8.5)
+        DUp(9.5,31.0) DLeft(3.5,41.4) DRight(15.5,41.4) DDown(9.5,51.8)
+        Y(90.5,31.0)  X(84.5,41.4)   B(96.5,41.4)      A(90.5,51.8)
+        LJS(12.0,75.0)  RJS(88.0,75.0)
+        L3(4.0,93.0)    R3(96.0,93.0)
+
+      V10 — SPACING-ONLY PASS (no visual/design/size changes; every id,
+      view class, drawable, color, and size_percent above is untouched).
+      Only leftJoystick / rightJoystick bias values moved:
+        - Every other control (shoulders, D-pad, ABXY, View/Home/Menu,
+          L3/R3) already sits within ~0.2%–2% of its nearest screen edge
+          or neighbor, so there was no meaningful slack left to reclaim
+          there without touching size or introducing overlap risk.
+        - The joysticks were the one group with real unused margin
+          (8% empty horizontal margin vs. ~0.2%-2% for every other
+          edge-hugging control, plus a near-zero 0.215%-of-height gap
+          to the D-pad/ABXY row above them). They were pulled outward
+          toward the side edges (15.5%→12.0% / 84.5%→88.0% x) and
+          nudged down (73.5%→75.0% y), which simultaneously:
+            1) closes most of that unused side margin,
+            2) opens the D-pad/ABXY→joystick vertical gap from 0.215%
+               to ~1.7% of screen height (was uncomfortably tight),
+            3) still leaves 21.9px clearance to L3/R3 and 17.3px
+               clearance to the D-pad (both > the 14px min-gap rule
+               used throughout this layout), and
+            4) leaves the joystick bottom edge at 89.975% — well clear
+               of the screen bottom, so L3/R3 are not pushed off-screen.
+        - Net effect: the open central gameplay gap between the two
+          joysticks actually grows (from ~54% to ~61% of screen width),
+          satisfying "keep the central gameplay area clear" while still
+          reducing the dead margin on the left/right edges.
+
+      V11 — EDGE-SAFETY PASS. Note on ConstraintLayout bias semantics:
+      every control here is anchored with BOTH Start_toStartOf="parent"
+      AND End_toEndOf="parent" (same for Top/Bottom). With that dual-
+      anchor pattern, `bias` is the view's position as a fraction of the
+      *remaining free space* (parentSize − viewSize), not a fraction of
+      the raw parent size — so centerX = bias·(W−size) + size/2. That
+      guarantees left = bias·(W−size) ≥ 0 and right ≤ W for any bias in
+      [0,1]: the full view rectangle can never leave the parent in this
+      setup, regardless of how close to 0/1 the bias looks. Full-rect
+      audit (left/right/top/bottom vs parent, not just center) confirmed
+      zero clipping in V10.
+      That said, a few edge margins were uncomfortably thin for real
+      touch/gesture-zone safety (btnDpadLeft & btnB: 3.7px; L3/R3
+      bottom: 5.8px) versus this file's own 14px minimum-gap standard
+      used everywhere else. Fixed by translating whole shapes (not
+      resizing/re-deriving them) so geometry is preserved exactly:
+        - D-pad cross shifted +10.3px right (all 4 buttons, same delta)
+        - ABXY diamond shifted −10.3px left (all 4 buttons, same delta)
+        - L3 and R3 both nudged +8.2px up (independently, still mirrored)
+      All edge margins are now ≥13.4px and all neighbor-to-neighbor
+      clearances (D-pad↔joystick, joystick↔L3/R3, ABXY↔joystick, etc.)
+      are ≥15.4px — at or above the 14px standard already used
+      throughout this file. No sizes, colors, ids, view classes, or
+      Kotlin were touched.
+
+      V12 — COMPOSITION PASS, targeting the Far Cry 5 HUD reference.
+      Sizes, colors, drawables, view classes, ids, and touch handling
+      are all UNCHANGED — RoundButtonView/ShoulderButtonView/JoystickView
+      onDraw already closely matches the reference's language (thin
+      single-stroke outline, transparent interior, dotted-texture stick
+      cap), so this pass is positioning only.
+        - Reworked the previous edge-hugging margins (13-14px, from the
+          V11 clipping-safety pass) into genuinely comfortable ones
+          (~35-225px) per this brief's explicit "do not push controls
+          against the physical edge" direction — a deliberate reversal
+          of V9-V11's "push to edge" instructions, since this turn's
+          brief supersedes them.
+        - LT, the D-pad's left edge, and L3 are now aligned to the SAME
+          x-column (a straight vertical line down the left side), matching
+          the reference's left-hand control column. RT/ABXY-right-edge/R3
+          mirror this on the right.
+        - D-pad and ABXY were each translated as a single rigid unit
+          (same internal cross/diamond geometry, only repositioned) so
+          "D-pad remains a proper cross" / "ABXY remains a proper
+          diamond" hold automatically - verified centers mirror to
+          0.1px.
+        - leftJoystick/rightJoystick moved in from the edge (12%→12.4%
+          of remaining space, i.e. ~18% of screen width) to sit more
+          centrally under their cluster rather than edge-anchored,
+          matching the reference's proportionally larger, more central
+          stick placement, while keeping the same view size.
+        - L3/R3 moved up ~21px to sit closer to/more associated with
+          their stick (per reference), while keeping ≥21.9px clearance
+          to the stick and ≥35px from the bottom edge.
+        - Re-validated the full 19-control set directly from the saved
+          XML: zero clipping, zero overlaps, minimum gap 21.9px (up
+          from V11's 14-15px), central gameplay gap between the two
+          sticks still ~55% of screen width.
+
+      V13 — STICK-ONLY INWARD PASS. Only leftJoystick/rightJoystick
+      Horizontal_bias touched (12.37%→28.83% and 87.63%→71.17% of
+      remaining space); vertical bias, size, and every other control
+      are byte-for-byte unchanged.
+        - leftJoystick center moves from ~18.0% to ~32.0% of screen
+          width; rightJoystick mirrors it at ~68.0%. Both sticks were
+          directly beside the D-pad/ABXY column, so moving them toward
+          center only increases (never decreases) their clearance to
+          the D-pad, ABXY, and L3/R3 — verified via the same
+          circle-vs-circle distance check used in V9-V12: min gap
+          actually grows from ~18-22px to ~210px+.
+        - Central gameplay gap between the two stick's inner edges is
+          now ~323px (~21% of screen width) — still an open center
+          area, just no longer 55%+ of the screen.
+
+      V14 — VERTICAL-ONLY PASS. Only Vertical_bias touched on 12
+      controls; every Horizontal_bias, size, id, and every other
+      control (joysticks, L3/R3, View/Home/Menu, status bar) is
+      byte-for-byte unchanged.
+        - btnLT/btnLB/btnRB/btnRT: 0.1034→0.0765 (all four moved up
+          by the same ~18px delta, so the shoulder row stays level
+          and symmetrical left/right).
+        - btnDpadUp/Left/Right/Down: 0.2816/0.401/0.401/0.5207 →
+          0.3086/0.428/0.428/0.5476 (all four rows shifted down by
+          the same ~18px delta — the cross's internal spacing is
+          identical, only translated).
+        - btnY/X/B/A: 0.2816/0.401/0.401/0.5207 →
+          0.3086/0.428/0.428/0.5476 (same ~18px down delta as the
+          D-pad, so the diamond's internal spacing is unchanged and
+          D-pad/ABXY move down together in lockstep).
+        - Re-checked clearance after the shift: shoulders moving up
+          only increases their gap to the View/Home/Menu row above
+          and to the D-pad/ABXY below (both already far apart), and
+          D-pad/ABXY moving down toward the (untouched) joysticks
+          still leaves ~150px of circle-to-circle clearance — no new
+          clipping or overlap introduced.
     -->
 
     <!-- ══════════════════════════════════════════════════════
          TOP-LEFT: LT / LB
-         Size measured from reference: ~130px wide × ~100px tall.
-         w_pct=0.085 (130/1536)  h_pct=0.130 (100/768)
-         LT center: (4.6%, 15.0%)
-         LB center: (13.0%, 15.0%)   — touching LT's right edge, matching ref.
+         Now drawn as circles by ShoulderButtonView (see that file's
+         diff) to match the JSX's uniform circular shoulder buttons,
+         rather than the previous larger trapezoid shape.
          ══════════════════════════════════════════════════════ -->
 
     <com.example.remotegamepad.ui.ShoulderButtonView
         android:id="@+id/btnLT"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintWidth_percent="0.085"
-        app:layout_constraintHeight_percent="0.130"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.1302"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.004"
-        app:layout_constraintVertical_bias="0.098" />
+        app:layout_constraintHorizontal_bias="0.0543"
+        app:layout_constraintVertical_bias="0.0765" />
 
     <com.example.remotegamepad.ui.ShoulderButtonView
         android:id="@+id/btnLB"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintWidth_percent="0.085"
-        app:layout_constraintHeight_percent="0.130"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.1302"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.091"
-        app:layout_constraintVertical_bias="0.098" />
+        app:layout_constraintHorizontal_bias="0.157"
+        app:layout_constraintVertical_bias="0.0765" />
 
     <!-- ══════════════════════════════════════════════════════
          TOP-RIGHT: RB / RT
-         RB center: (87.0%, 15.0%)
-         RT center: (95.4%, 15.0%)   — touching RB's left edge, matching ref.
          ══════════════════════════════════════════════════════ -->
 
     <com.example.remotegamepad.ui.ShoulderButtonView
         android:id="@+id/btnRB"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintWidth_percent="0.085"
-        app:layout_constraintHeight_percent="0.130"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.1302"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.864"
-        app:layout_constraintVertical_bias="0.098" />
+        app:layout_constraintHorizontal_bias="0.843"
+        app:layout_constraintVertical_bias="0.0765" />
 
     <com.example.remotegamepad.ui.ShoulderButtonView
         android:id="@+id/btnRT"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintWidth_percent="0.085"
-        app:layout_constraintHeight_percent="0.130"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintHeight_percent="0.1302"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.952"
-        app:layout_constraintVertical_bias="0.098" />
+        app:layout_constraintHorizontal_bias="0.9457"
+        app:layout_constraintVertical_bias="0.0765" />
 
     <!-- ══════════════════════════════════════════════════════
          TOP-CENTER: VIEW / HOME / MENU
-         Measured at top of reference image (y≈6.1%).
+         Pushed down slightly from V8 (which had Home at v_bias=0.001,
+         clipping/touching the very top edge) to a safe ~3% margin.
          ivLogo is a tiny icon referenced by setupCenterButtons() (no-op).
          ══════════════════════════════════════════════════════ -->
 
@@ -144,19 +257,18 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.01" />
 
-    <!-- btnView: ◄ left of trio, center at (38.3%, 6.1%), h_pct=0.10 -->
     <com.example.remotegamepad.ui.RoundButtonView
         android:id="@+id/btnView"
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintHeight_percent="0.10"
+        app:layout_constraintHeight_percent="0.1016"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.377"
-        app:layout_constraintVertical_bias="0.012" />
+        app:layout_constraintHorizontal_bias="0.3767"
+        app:layout_constraintVertical_bias="0.0381" />
 
     <TextView
         android:id="@+id/tvViewLabel"
@@ -171,19 +283,18 @@
         app:layout_constraintTop_toBottomOf="@id/btnView"
         android:layout_marginTop="2dp" />
 
-    <!-- btnHome: gamepad icon, center of trio, center at (46.0%, 6.1%), h_pct=0.12 -->
     <com.example.remotegamepad.ui.RoundButtonView
         android:id="@+id/btnHome"
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintHeight_percent="0.12"
+        app:layout_constraintHeight_percent="0.1250"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.457"
-        app:layout_constraintVertical_bias="0.001" />
+        app:layout_constraintHorizontal_bias="0.4573"
+        app:layout_constraintVertical_bias="0.0314" />
 
     <TextView
         android:id="@+id/tvHomeLabel"
@@ -198,19 +309,18 @@
         app:layout_constraintTop_toBottomOf="@id/btnHome"
         android:layout_marginTop="2dp" />
 
-    <!-- btnMenu: ► right of trio, center at (53.3%, 6.1%), h_pct=0.10 -->
     <com.example.remotegamepad.ui.RoundButtonView
         android:id="@+id/btnMenu"
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintHeight_percent="0.10"
+        app:layout_constraintHeight_percent="0.1016"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.535"
-        app:layout_constraintVertical_bias="0.012" />
+        app:layout_constraintHorizontal_bias="0.5369"
+        app:layout_constraintVertical_bias="0.0381" />
 
     <TextView
         android:id="@+id/tvMenuLabel"
@@ -227,14 +337,11 @@
 
     <!-- ══════════════════════════════════════════════════════
          LEFT: D-PAD — 4 INDIVIDUAL CIRCULAR BUTTONS
-         Diameter ≈ 94px in 768px → h_pct=0.122.
-         Formula (2:1 screen): H=(cx-P/4)/(1-P/2), V=(cy-P/2)/(1-P)
-         where P=0.122: P/4=0.0305, P/2=0.061, 1-P/2=0.939, 1-P=0.878
-
-         DpadUp    (8.7%, 28.9%) h=0.060 v=0.260
-         DpadLeft  (3.9%, 40.4%) h=0.009 v=0.391
-         DpadRight(13.5%, 40.4%) h=0.111 v=0.391
-         DpadDown  (8.7%, 51.8%) h=0.060 v=0.521
+         Same size as ABXY now (unified, matches JSX's uniform button
+         sizing). Cross arms spread further apart than V8 for the
+         "generous spacing" requirement, and shifted up slightly to
+         keep clearance from both the shoulder-button row above and
+         the enlarged joystick below (see layout_calc.py check).
          ══════════════════════════════════════════════════════ -->
 
     <com.example.remotegamepad.ui.RoundButtonView
@@ -242,62 +349,57 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintHeight_percent="0.122"
+        app:layout_constraintHeight_percent="0.1302"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.060"
-        app:layout_constraintVertical_bias="0.260" />
+        app:layout_constraintHorizontal_bias="0.1185"
+        app:layout_constraintVertical_bias="0.3086" />
 
     <com.example.remotegamepad.ui.RoundButtonView
         android:id="@+id/btnDpadLeft"
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintHeight_percent="0.122"
+        app:layout_constraintHeight_percent="0.1302"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.009"
-        app:layout_constraintVertical_bias="0.391" />
+        app:layout_constraintHorizontal_bias="0.0543"
+        app:layout_constraintVertical_bias="0.428" />
 
     <com.example.remotegamepad.ui.RoundButtonView
         android:id="@+id/btnDpadRight"
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintHeight_percent="0.122"
+        app:layout_constraintHeight_percent="0.1302"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.111"
-        app:layout_constraintVertical_bias="0.391" />
+        app:layout_constraintHorizontal_bias="0.1827"
+        app:layout_constraintVertical_bias="0.428" />
 
     <com.example.remotegamepad.ui.RoundButtonView
         android:id="@+id/btnDpadDown"
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintHeight_percent="0.122"
+        app:layout_constraintHeight_percent="0.1302"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.060"
-        app:layout_constraintVertical_bias="0.521" />
+        app:layout_constraintHorizontal_bias="0.1185"
+        app:layout_constraintVertical_bias="0.5476" />
 
     <!-- ══════════════════════════════════════════════════════
          LOWER-LEFT: LEFT JOYSTICK
-         Visual outer ring ≈ 200px in reference (768px tall).
-         JoystickView draws ring at min(w,h)/2 × 0.95, so:
-           view_size = 200/0.95 = 210px → h_pct = 210/768 = 0.274 ≈ 0.28
-         Center at (22.1%, 65.1%) in reference:
-           H=(0.221-0.07)/(1-0.14)=0.151/0.86=0.176
-           V=(0.651-0.14)/(1-0.28)=0.511/0.72=0.710
-         Joystick bottom: (65.1%+14%)×684=541px < 684px ✓
+         Enlarged to height_percent=0.2995 (from V8's 0.28) to use
+         more of the available screen, per the explicit brief.
          ══════════════════════════════════════════════════════ -->
 
     <com.example.remotegamepad.ui.JoystickView
@@ -305,21 +407,16 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintHeight_percent="0.28"
+        app:layout_constraintHeight_percent="0.2995"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.176"
-        app:layout_constraintVertical_bias="0.710" />
+        app:layout_constraintHorizontal_bias="0.2883"
+        app:layout_constraintVertical_bias="0.8569" />
 
     <!-- ══════════════════════════════════════════════════════
          BOTTOM-LEFT: L3
-         Diameter ≈ 95px → h_pct=0.124.
-         Center at (4.2%, 91.1%):
-           H=(0.042-0.031)/0.938=0.012
-           V=(0.911-0.062)/0.876=0.969
-         Bottom: (91.1%+6.2%)×684=666px < 684px ✓
          ══════════════════════════════════════════════════════ -->
 
     <com.example.remotegamepad.ui.RoundButtonView
@@ -327,86 +424,73 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintHeight_percent="0.124"
+        app:layout_constraintHeight_percent="0.1250"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.012"
-        app:layout_constraintVertical_bias="0.969" />
+        app:layout_constraintHorizontal_bias="0.0542"
+        app:layout_constraintVertical_bias="0.9479" />
 
     <!-- ══════════════════════════════════════════════════════
          RIGHT: ABXY — 4 INDIVIDUAL CIRCULAR BUTTONS
-         Diameter ≈ 110px in 768px → h_pct=0.143.
-         Formula: P=0.143: P/4=0.0358, P/2=0.0715, 1-P/2=0.9285, 1-P=0.857
-
-         Y (78.3%, 28.6%) h=0.805 v=0.250
-         X (72.4%, 40.4%) h=0.741 v=0.388
-         B (85.3%, 40.4%) h=0.880 v=0.388
-         A (78.3%, 52.1%) h=0.805 v=0.525
+         Same size as D-pad now (unified, see note above).
          ══════════════════════════════════════════════════════ -->
 
-    <!-- Y — top of diamond -->
     <com.example.remotegamepad.ui.RoundButtonView
         android:id="@+id/btnY"
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintHeight_percent="0.143"
+        app:layout_constraintHeight_percent="0.1302"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.805"
-        app:layout_constraintVertical_bias="0.250" />
+        app:layout_constraintHorizontal_bias="0.8815"
+        app:layout_constraintVertical_bias="0.3086" />
 
-    <!-- X — left of diamond -->
     <com.example.remotegamepad.ui.RoundButtonView
         android:id="@+id/btnX"
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintHeight_percent="0.143"
+        app:layout_constraintHeight_percent="0.1302"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.741"
-        app:layout_constraintVertical_bias="0.388" />
+        app:layout_constraintHorizontal_bias="0.8173"
+        app:layout_constraintVertical_bias="0.428" />
 
-    <!-- B — right of diamond -->
     <com.example.remotegamepad.ui.RoundButtonView
         android:id="@+id/btnB"
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintHeight_percent="0.143"
+        app:layout_constraintHeight_percent="0.1302"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.880"
-        app:layout_constraintVertical_bias="0.388" />
+        app:layout_constraintHorizontal_bias="0.9457"
+        app:layout_constraintVertical_bias="0.428" />
 
-    <!-- A — bottom of diamond -->
     <com.example.remotegamepad.ui.RoundButtonView
         android:id="@+id/btnA"
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintHeight_percent="0.143"
+        app:layout_constraintHeight_percent="0.1302"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.805"
-        app:layout_constraintVertical_bias="0.525" />
+        app:layout_constraintHorizontal_bias="0.8815"
+        app:layout_constraintVertical_bias="0.5476" />
 
     <!-- ══════════════════════════════════════════════════════
          LOWER-RIGHT: RIGHT JOYSTICK
-         Same size as left. Center at (68.5%, 65.1%):
-           H=(0.685-0.07)/0.86=0.615/0.86=0.715
-           V=0.710
          ══════════════════════════════════════════════════════ -->
 
     <com.example.remotegamepad.ui.JoystickView
@@ -414,19 +498,16 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintHeight_percent="0.28"
+        app:layout_constraintHeight_percent="0.2995"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.715"
-        app:layout_constraintVertical_bias="0.710" />
+        app:layout_constraintHorizontal_bias="0.7117"
+        app:layout_constraintVertical_bias="0.8569" />
 
     <!-- ══════════════════════════════════════════════════════
          BOTTOM-RIGHT: R3
-         Center at (95.8%, 91.1%):
-           H=(0.958-0.031)/0.938=0.988
-           V=0.969
          ══════════════════════════════════════════════════════ -->
 
     <com.example.remotegamepad.ui.RoundButtonView
@@ -434,17 +515,17 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintHeight_percent="0.124"
+        app:layout_constraintHeight_percent="0.1250"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintHorizontal_bias="0.988"
-        app:layout_constraintVertical_bias="0.969" />
+        app:layout_constraintHorizontal_bias="0.9458"
+        app:layout_constraintVertical_bias="0.9479" />
 
     <!-- ══════════════════════════════════════════════════════
-         BOTTOM-CENTRE STATUS BAR
-         Both IDs referenced by GamepadActivity.
+         BOTTOM-CENTRE STATUS BAR — unchanged from V8.
+         Both ids referenced by GamepadActivity.
          ══════════════════════════════════════════════════════ -->
 
     <LinearLayout

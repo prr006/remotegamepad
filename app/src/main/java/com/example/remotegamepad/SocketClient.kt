@@ -211,7 +211,14 @@ class SocketClient(context: Context) : GamepadTransport {
         rightX: Float,
         rightY: Float
     ): ByteArray =
-        "STATE:$seq:${mask and 0xFFFF}:$leftX,$leftY:$rightX,$rightY"
+        // ButtonState.ORDER has 17 entries (bits 0-16: RT is the last bit,
+        // at index 16). 0xFFFF is only a 16-bit mask (bits 0-15), so it was
+        // silently dropping RT's bit from every STATE packet - the
+        // immediate RT_DOWN edge event still worked, but the next periodic
+        // STATE resync (applied as an absolute snapshot) always saw RT's
+        // bit cleared and forced the trigger back to 0, so RT could never
+        // stay held. 0x1FFFF covers all 17 tracked bits.
+        "STATE:$seq:${mask and 0x1FFFF}:$leftX,$leftY:$rightX,$rightY"
             .toByteArray(Charsets.US_ASCII)
 
     override fun close() {

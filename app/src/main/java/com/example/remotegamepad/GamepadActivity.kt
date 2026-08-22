@@ -3,6 +3,7 @@ package com.example.remotegamepad
 import androidx.appcompat.app.AppCompatActivity
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
@@ -48,6 +49,24 @@ class GamepadActivity : AppCompatActivity() {
     // *_UP packet get corrected instead of leaving a button stuck held.
     private val buttonState = ButtonState()
 
+    // Guards the read-mask-then-send-STATE sequence (state ticker thread)
+    // against the set-then-send-edge sequence (sendButtonEvent, UI thread).
+    // ButtonState.set/mask are individually thread-safe, but that only
+    // protects the flags array itself - without this lock, the two threads
+    // can still race on the ORDER in which their respective packets reach
+    // the transport's send queue. Concretely: the state ticker can read a
+    // mask snapshot (say button A still pressed), then get preempted before
+    // it actually calls transport.sendState(); in that gap the UI thread
+    // can process the real release (buttonState.set("A", false) +
+    // transport.send("A_UP")) and enqueue it first; when the ticker thread
+    // resumes it enqueues its now-stale "A still pressed" STATE packet
+    // *after* the correct A_UP - so the receiver sees a legitimate release
+    // immediately followed by a stale heartbeat that resurrects the press.
+    // Wrapping both sequences in this lock makes "mutate state + enqueue
+    // packet" one atomic unit for both call sites, so the queue order can
+    // never contradict the real order of events.
+    private val sendLock = Any()
+
     private var stateTicker: Thread? = null
 
     // STATE heartbeat rate: ~29Hz, inside the requested 20-30Hz band and
@@ -60,6 +79,19 @@ class GamepadActivity : AppCompatActivity() {
     // physical-position -> protocol-name map lives in bindRound below and
     // is never touched by this.
     private var faceLayout: FaceButtonLayout = FaceButtonLayout.XBOX
+
+    companion object {
+        // TEMPORARY INPUT-MAPPING DIAGNOSTIC. Logs every DOWN/UP edge for
+        // the currently-disputed controls (D-pad/HOME/LT/RT) plus every
+        // STATE heartbeat's mask, both as decimal and as a binary string
+        // with the bit index of each affected control labeled - so a
+        // logcat capture during a single press of each control gives a
+        // direct [INPUT]->[SEND]->(server side)[RX]->[MAP] comparison
+        // instead of guessing. Flip to false once the mismatch (if any)
+        // is confirmed and fixed; this is not meant to ship on.
+        private const val INPUT_DIAG = true
+        private val DIAG_NAMES = setOf("HOME", "DPAD_UP", "DPAD_DOWN", "DPAD_LEFT", "DPAD_RIGHT", "LT", "RT")
+    }
 
     // Physical position (view id) -> fixed protocol name, for re-drawing
     // labels when the layout is toggled. Kept in one place so
@@ -232,7 +264,26 @@ class GamepadActivity : AppCompatActivity() {
                 // Same atomic-snapshot read as the joystick ticker.
                 val l = leftSnap
                 val r = rightSnap
-                transport.sendState(buttonState.mask(), l.x, l.y, r.x, r.y)
+                // See sendLock's doc: this must be atomic with respect to
+                // sendButtonEvent's set()+send() below, or a release can be
+                // sent and then immediately contradicted by a stale mask
+                // captured just before it.
+                synchronized(sendLock) {
+                    val mask = buttonState.mask()
+                    if (INPUT_DIAG) {
+                        // Bit indices per ButtonState.ORDER: HOME=10,
+                        // DPAD_UP=11, DPAD_DOWN=12, DPAD_LEFT=13,
+                        // DPAD_RIGHT=14, LT=15, RT=16.
+                        Log.d(
+                            "INPUT_DIAG",
+                            "[SEND STATE] mask=$mask binary=${mask.toString(2).padStart(17, '0')} " +
+                                "HOME=${(mask shr 10) and 1} UP=${(mask shr 11) and 1} DOWN=${(mask shr 12) and 1} " +
+                                "LEFT=${(mask shr 13) and 1} RIGHT=${(mask shr 14) and 1} " +
+                                "LT=${(mask shr 15) and 1} RT=${(mask shr 16) and 1}"
+                        )
+                    }
+                    transport.sendState(mask, l.x, l.y, r.x, r.y)
+                }
 
                 nextTick += stateTickMs
                 val sleepMs = nextTick - System.currentTimeMillis()
@@ -374,8 +425,17 @@ class GamepadActivity : AppCompatActivity() {
         // Update the authoritative snapshot FIRST, so if the state ticker
         // happens to fire between these two lines it already reflects this
         // edge - the DOWN/UP event and the next heartbeat can never
-        // disagree about this button.
-        buttonState.set(name, pressed)
-        transport.send(if (pressed) "${name}_DOWN" else "${name}_UP")
+        // disagree about this button. Synchronized on sendLock (see its
+        // doc) so this whole set+send sequence can't be interleaved with
+        // the state ticker's own mask-read+send sequence either.
+        synchronized(sendLock) {
+            buttonState.set(name, pressed)
+            val packet = if (pressed) "${name}_DOWN" else "${name}_UP"
+            if (INPUT_DIAG && name in DIAG_NAMES) {
+                Log.d("INPUT_DIAG", "[INPUT] physical=$name logical=$name pressed=$pressed")
+                Log.d("INPUT_DIAG", "[SEND] $packet")
+            }
+            transport.send(packet)
+        }
     }
 }
