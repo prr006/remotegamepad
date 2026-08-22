@@ -476,6 +476,9 @@ class Program
         {
             var controller = player.Controller;
 
+            // ===== TEMPORARY DIAGNOSTIC LOGGING =====
+            Console.WriteLine($"[SERVER_DIAG] RX {data}");
+
             // BUTTONS - immediate low-latency edge events. Unchanged wire
             // format from before; still applied as soon as they arrive.
             if (data.EndsWith("_DOWN") || data.EndsWith("_UP"))
@@ -484,72 +487,90 @@ class Program
 
                 string key = data.Substring(0, data.LastIndexOf('_'));
 
+                // ===== TEMPORARY DIAGNOSTIC LOGGING =====
+                Console.WriteLine($"[SERVER_DIAG] MAP {key} pressed={pressed}");
+
                 lock (player.Lock)
                 {
                     switch (key)
                     {
                         case "A":
                             controller.SetButtonState(Xbox360Button.A, pressed);
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(A, {pressed})");
                             break;
 
                         case "B":
                             controller.SetButtonState(Xbox360Button.B, pressed);
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(B, {pressed})");
                             break;
 
                         case "X":
                             controller.SetButtonState(Xbox360Button.X, pressed);
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(X, {pressed})");
                             break;
 
                         case "Y":
                             controller.SetButtonState(Xbox360Button.Y, pressed);
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(Y, {pressed})");
                             break;
 
                         case "LB":
                             controller.SetButtonState(Xbox360Button.LeftShoulder, pressed);
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(LeftShoulder, {pressed})");
                             break;
 
                         case "RB":
                             controller.SetButtonState(Xbox360Button.RightShoulder, pressed);
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(RightShoulder, {pressed})");
                             break;
 
                         case "LS":
                             controller.SetButtonState(Xbox360Button.LeftThumb, pressed);
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(LeftThumb, {pressed})");
                             break;
 
                         case "RS":
                             controller.SetButtonState(Xbox360Button.RightThumb, pressed);
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(RightThumb, {pressed})");
                             break;
 
                         case "START":
                             controller.SetButtonState(Xbox360Button.Start, pressed);
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(Start, {pressed})");
                             break;
 
                         case "SELECT":
                             controller.SetButtonState(Xbox360Button.Back, pressed);
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(Back, {pressed})");
                             break;
 
                         case "HOME":
                             controller.SetButtonState(Xbox360Button.Guide, pressed);
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(Guide, {pressed})");
                             break;
 
                         case "DPAD_UP":
                             player.DPad.Up = pressed;
                             controller.SetDPadDirection(player.DPad.GetDirection());
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetDPadDirection({player.DPad.GetDirection()})");
                             break;
 
                         case "DPAD_DOWN":
                             player.DPad.Down = pressed;
                             controller.SetDPadDirection(player.DPad.GetDirection());
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetDPadDirection({player.DPad.GetDirection()})");
                             break;
 
                         case "DPAD_LEFT":
                             player.DPad.Left = pressed;
                             controller.SetDPadDirection(player.DPad.GetDirection());
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetDPadDirection({player.DPad.GetDirection()})");
                             break;
 
                         case "DPAD_RIGHT":
                             player.DPad.Right = pressed;
                             controller.SetDPadDirection(player.DPad.GetDirection());
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetDPadDirection({player.DPad.GetDirection()})");
                             break;
 
                         case "LT":
@@ -557,6 +578,7 @@ class Program
                                 Xbox360Slider.LeftTrigger,
                                 pressed ? (byte)255 : (byte)0
                             );
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetSliderValue(LeftTrigger, {(pressed ? 255 : 0)})");
                             break;
 
                         case "RT":
@@ -564,6 +586,7 @@ class Program
                                 Xbox360Slider.RightTrigger,
                                 pressed ? (byte)255 : (byte)0
                             );
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetSliderValue(RightTrigger, {(pressed ? 255 : 0)})");
                             break;
                     }
 
@@ -675,6 +698,13 @@ class Program
                 if (!int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out int mask))
                     return;
 
+                // ===== TEMPORARY DIAGNOSTIC LOGGING =====
+                Console.WriteLine($"[SERVER_DIAG] RX STATE seq={seq} mask={mask}");
+                for (int i = 10; i <= 16; i++)
+                {
+                    Console.WriteLine($"[SERVER_DIAG] STATE bit {i}={(mask & (1 << i)) != 0}");
+                }
+
                 // STATE:seq:mask:leftX,leftY:rightX,rightY
                 // Older clients may still send only STATE:seq:mask; those
                 // packets remain valid for digital-button resync.
@@ -712,7 +742,10 @@ class Program
                     // Reordering safety: an older snapshot can never
                     // overwrite a newer one already applied.
                     if (seq <= player.LastStateSeq)
+                    {
+                        Console.WriteLine($"[SERVER_DIAG] STATE REJECTED stale seq={seq} <= lastStateSeq={player.LastStateSeq}");
                         return;
+                    }
 
                     player.LastStateSeq = seq;
 
@@ -744,9 +777,14 @@ class Program
 
     static void ApplyButtonMask(IXbox360Controller controller, int mask, DPadState dpad)
     {
+        // ===== TEMPORARY DIAGNOSTIC LOGGING =====
+        Console.WriteLine($"[SERVER_DIAG] APPLY_BUTTON_MASK mask={mask}");
+
         foreach (var (bit, button) in MaskButtons)
         {
-            controller.SetButtonState(button, (mask & (1 << bit)) != 0);
+            bool state = (mask & (1 << bit)) != 0;
+            controller.SetButtonState(button, state);
+            Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState({button}, {state}) [bit {bit}]");
         }
 
         // D-pad: extract bits 11-14 and update DPadState accordingly
@@ -754,10 +792,16 @@ class Program
         dpad.Down = (mask & (1 << 12)) != 0;
         dpad.Left = (mask & (1 << 13)) != 0;
         dpad.Right = (mask & (1 << 14)) != 0;
-        controller.SetDPadDirection(dpad.GetDirection());
+        var dpadDir = dpad.GetDirection();
+        controller.SetDPadDirection(dpadDir);
+        Console.WriteLine($"[SERVER_DIAG] VIGEM SetDPadDirection({dpadDir}) [bits 11-14: U={(mask & (1 << 11)) != 0} D={(mask & (1 << 12)) != 0} L={(mask & (1 << 13)) != 0} R={(mask & (1 << 14)) != 0}]");
 
-        controller.SetSliderValue(Xbox360Slider.LeftTrigger, (mask & (1 << LtBit)) != 0 ? (byte)255 : (byte)0);
-        controller.SetSliderValue(Xbox360Slider.RightTrigger, (mask & (1 << RtBit)) != 0 ? (byte)255 : (byte)0);
+        var ltVal = (mask & (1 << LtBit)) != 0 ? (byte)255 : (byte)0;
+        var rtVal = (mask & (1 << RtBit)) != 0 ? (byte)255 : (byte)0;
+        controller.SetSliderValue(Xbox360Slider.LeftTrigger, ltVal);
+        controller.SetSliderValue(Xbox360Slider.RightTrigger, rtVal);
+        Console.WriteLine($"[SERVER_DIAG] VIGEM SetSliderValue(LeftTrigger, {ltVal}) [bit {LtBit}]");
+        Console.WriteLine($"[SERVER_DIAG] VIGEM SetSliderValue(RightTrigger, {rtVal}) [bit {RtBit}]");
     }
 
     static void ApplyJoystickState(

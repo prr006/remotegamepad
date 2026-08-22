@@ -174,6 +174,10 @@ class SocketClient(context: Context) : GamepadTransport {
     /** Button / dpad / trigger edge events. Always high priority. */
     override fun send(message: String) {
         if (!ready) return
+        
+        // ===== TEMPORARY DIAGNOSTIC LOGGING =====
+        Log.d("ANDROID_DIAG", "INPUT $message")
+        
         buttonQueue.offer(message.toByteArray(Charsets.US_ASCII))
     }
 
@@ -210,9 +214,17 @@ class SocketClient(context: Context) : GamepadTransport {
         leftY: Float,
         rightX: Float,
         rightY: Float
-    ): ByteArray =
-        "STATE:$seq:${mask and 0xFFFF}:$leftX,$leftY:$rightX,$rightY"
+    ): ByteArray {
+        // ===== TEMPORARY DIAGNOSTIC LOGGING =====
+        val bits = StringBuilder()
+        for (i in 10..16) {
+            bits.append("bit $i=${if ((mask and (1 shl i)) != 0) "1" else "0"} ")
+        }
+        Log.d("ANDROID_DIAG", "STATE mask=$mask $bits")
+        
+        return "STATE:$seq:${mask}:$leftX,$leftY:$rightX,$rightY"
             .toByteArray(Charsets.US_ASCII)
+    }
 
     override fun close() {
         senderThread?.interrupt()
