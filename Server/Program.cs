@@ -42,34 +42,8 @@ class Program
         (9, Xbox360Button.Back),
         (10, Xbox360Button.Guide),
         // Bits 11-14 (DPAD_UP/DOWN/LEFT/RIGHT) are intentionally omitted -
-        // they are handled via SetDPadDirection() below.
+        // they are handled via SetButtonState() with Xbox360Button.Up/Down/Left/Right below.
     };
-
-    // Per-player D-pad state tracking for proper POV/HAT axis handling.
-    // Xbox 360 D-pad uses 8 directions (None, N, NE, E, SE, S, SW, W, NW).
-    // We track which cardinal directions are currently pressed and combine
-    // them into the appropriate diagonal direction.
-    class DPadState
-    {
-        public bool Up;
-        public bool Down;
-        public bool Left;
-        public bool Right;
-
-        public Nefarius.ViGEm.Client.Targets.Xbox360.Xbox360DpadDirection GetDirection()
-        {
-            // Combine cardinal directions into 8-way D-pad
-            if (Up && Left) return Nefarius.ViGEm.Client.Targets.Xbox360.Xbox360DpadDirection.Northwest;
-            if (Up && Right) return Nefarius.ViGEm.Client.Targets.Xbox360.Xbox360DpadDirection.Northeast;
-            if (Down && Left) return Nefarius.ViGEm.Client.Targets.Xbox360.Xbox360DpadDirection.Southwest;
-            if (Down && Right) return Nefarius.ViGEm.Client.Targets.Xbox360.Xbox360DpadDirection.Southeast;
-            if (Up) return Nefarius.ViGEm.Client.Targets.Xbox360.Xbox360DpadDirection.North;
-            if (Down) return Nefarius.ViGEm.Client.Targets.Xbox360.Xbox360DpadDirection.South;
-            if (Left) return Nefarius.ViGEm.Client.Targets.Xbox360.Xbox360DpadDirection.West;
-            if (Right) return Nefarius.ViGEm.Client.Targets.Xbox360.Xbox360DpadDirection.East;
-            return Nefarius.ViGEm.Client.Targets.Xbox360.Xbox360DpadDirection.None;
-        }
-    }
 
     // If we haven't heard from a controller in this long, assume the
     // phone crashed / lost Wi-Fi / went out of range and force every
@@ -232,9 +206,6 @@ class Program
         // axis, so it can log only on change. Null = nothing logged yet
         // (so the first write for a fresh player always logs).
         public short? DiagLastLeftX, DiagLastLeftY, DiagLastRightX, DiagLastRightY;
-
-        // Per-player D-pad state for proper POV/HAT axis handling.
-        public DPadState DPad = new DPadState();
     }
 
     static ControllerReportSnapshot ExpectedReportAfterInput(
@@ -731,27 +702,23 @@ class Program
                             break;
 
                         case "DPAD_UP":
-                            player.DPad.Up = pressed;
-                            controller.SetDPadDirection(player.DPad.GetDirection());
-                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetDPadDirection({player.DPad.GetDirection()})");
+                            controller.SetButtonState(Xbox360Button.Up, pressed);
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(Up, {pressed})");
                             break;
 
                         case "DPAD_DOWN":
-                            player.DPad.Down = pressed;
-                            controller.SetDPadDirection(player.DPad.GetDirection());
-                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetDPadDirection({player.DPad.GetDirection()})");
+                            controller.SetButtonState(Xbox360Button.Down, pressed);
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(Down, {pressed})");
                             break;
 
                         case "DPAD_LEFT":
-                            player.DPad.Left = pressed;
-                            controller.SetDPadDirection(player.DPad.GetDirection());
-                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetDPadDirection({player.DPad.GetDirection()})");
+                            controller.SetButtonState(Xbox360Button.Left, pressed);
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(Left, {pressed})");
                             break;
 
                         case "DPAD_RIGHT":
-                            player.DPad.Right = pressed;
-                            controller.SetDPadDirection(player.DPad.GetDirection());
-                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetDPadDirection({player.DPad.GetDirection()})");
+                            controller.SetButtonState(Xbox360Button.Right, pressed);
+                            Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(Right, {pressed})");
                             break;
 
                         case "LT":
@@ -934,7 +901,7 @@ class Program
 
                     player.LastStateSeq = seq;
 
-                    ApplyButtonMask(controller, mask, player.DPad);
+                    ApplyButtonMask(controller, mask);
 
                     // JOYSTICK AUTHORITY: JOY_L/JOY_R are now the ONLY
                     // packets allowed to write LeftThumbX/Y and
@@ -970,7 +937,7 @@ class Program
         }
     }
 
-    static void ApplyButtonMask(IXbox360Controller controller, int mask, DPadState dpad)
+    static void ApplyButtonMask(IXbox360Controller controller, int mask)
     {
         // ===== TEMPORARY DIAGNOSTIC LOGGING =====
         Console.WriteLine($"[SERVER_DIAG] APPLY_BUTTON_MASK mask={mask}");
@@ -982,14 +949,12 @@ class Program
             Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState({button}, {state}) [bit {bit}]");
         }
 
-        // D-pad: extract bits 11-14 and update DPadState accordingly
-        dpad.Up = (mask & (1 << 11)) != 0;
-        dpad.Down = (mask & (1 << 12)) != 0;
-        dpad.Left = (mask & (1 << 13)) != 0;
-        dpad.Right = (mask & (1 << 14)) != 0;
-        var dpadDir = dpad.GetDirection();
-        controller.SetDPadDirection(dpadDir);
-        Console.WriteLine($"[SERVER_DIAG] VIGEM SetDPadDirection({dpadDir}) [bits 11-14: U={(mask & (1 << 11)) != 0} D={(mask & (1 << 12)) != 0} L={(mask & (1 << 13)) != 0} R={(mask & (1 << 14)) != 0}]");
+        // D-pad: extract bits 11-14 and apply via Xbox360Button.Up/Down/Left/Right
+        controller.SetButtonState(Xbox360Button.Up, (mask & (1 << 11)) != 0);
+        controller.SetButtonState(Xbox360Button.Down, (mask & (1 << 12)) != 0);
+        controller.SetButtonState(Xbox360Button.Left, (mask & (1 << 13)) != 0);
+        controller.SetButtonState(Xbox360Button.Right, (mask & (1 << 14)) != 0);
+        Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(DPad) [bits 11-14: U={(mask & (1 << 11)) != 0} D={(mask & (1 << 12)) != 0} L={(mask & (1 << 13)) != 0} R={(mask & (1 << 14)) != 0}]");
 
         const int LtBit = 15;
         const int RtBit = 16;
@@ -1219,19 +1184,11 @@ class Program
             controller.SetButtonState(button, false);
         }
 
-        // Release D-pad to neutral
-        if (player != null)
-        {
-            player.DPad.Up = false;
-            player.DPad.Down = false;
-            player.DPad.Left = false;
-            player.DPad.Right = false;
-            controller.SetDPadDirection(player.DPad.GetDirection());
-        }
-        else
-        {
-            controller.SetDPadDirection(Nefarius.ViGEm.Client.Targets.Xbox360.Xbox360DpadDirection.None);
-        }
+        // Release D-pad to neutral via Xbox360Button.Up/Down/Left/Right
+        controller.SetButtonState(Xbox360Button.Up, false);
+        controller.SetButtonState(Xbox360Button.Down, false);
+        controller.SetButtonState(Xbox360Button.Left, false);
+        controller.SetButtonState(Xbox360Button.Right, false);
 
         controller.SetSliderValue(Xbox360Slider.LeftTrigger, 0);
         controller.SetSliderValue(Xbox360Slider.RightTrigger, 0);
