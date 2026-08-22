@@ -28,11 +28,6 @@ class Program
 
     static int playerCount = 0;
 
-<<<<<<< ours
-    // Digital buttons carried in a STATE mask, bit position = index here.
-    // MUST stay in sync with Android's ButtonState.ORDER.
-    // NOTE: D-pad (bits 11-14) is handled separately via SetDPadDirection(),
-    // not as individual buttons, because Xbox 360 uses a POV/HAT axis for D-pad.
     static readonly (int bit, Xbox360Button button)[] MaskButtons =
     {
         (0, Xbox360Button.A),
@@ -48,94 +43,7 @@ class Program
         (10, Xbox360Button.Guide),
         // Bits 11-14 (DPAD_UP/DOWN/LEFT/RIGHT) are intentionally omitted -
         // they are handled via SetDPadDirection() below.
-=======
-    // ================= EXPLICIT PROTOCOL-KEY -> OUTPUT MAPPING =================
-    // Single source of truth for every digital/trigger control. Every
-    // protocol key (the string before _DOWN/_UP, and the same name used
-    // conceptually by Android's ButtonState.ORDER for STATE packets) maps
-    // to exactly one Xbox360 output here, keyed by name - never by array
-    // index, bit-shift-from-neighbor, or enumeration order. Both the
-    // low-latency _DOWN/_UP edge path and the STATE heartbeat resync path
-    // read from this SAME dictionary (see InputMap.TryGetValue in
-    // HandleInput, and ApplyButtonMask below), so there is no
-    // second, independently-maintained table that could drift out of
-    // sync and cause one control to resolve to another control's output.
-    //
-    // StateBit is only used for decoding a STATE packet's mask field and
-    // must stay in sync with Android's ButtonState.ORDER (see
-    // ButtonState.kt) - matched here by key NAME, not by position, so a
-    // reordering on either side is a visible mismatch rather than a
-    // silent cross-wire.
-    internal enum ControlKind { Button, Slider }
-
-    internal sealed class InputMapping
-    {
-        public readonly string Key;
-        public readonly ControlKind Kind;
-        public readonly Xbox360Button Button;
-        public readonly Xbox360Slider Slider;
-        public readonly int StateBit;
-
-        private InputMapping(string key, ControlKind kind, Xbox360Button button, Xbox360Slider slider, int stateBit)
-        {
-            Key = key;
-            Kind = kind;
-            Button = button;
-            Slider = slider;
-            StateBit = stateBit;
-        }
-
-        public static InputMapping ForButton(string key, Xbox360Button button, int stateBit) =>
-            new InputMapping(key, ControlKind.Button, button, default, stateBit);
-
-        public static InputMapping ForSlider(string key, Xbox360Slider slider, int stateBit) =>
-            new InputMapping(key, ControlKind.Slider, default, slider, stateBit);
-
-        // Applies this control's press/release state to the controller.
-        // This is the ONLY place that writes Key's mapped output, and it
-        // is used identically by both the edge path and the STATE path -
-        // there is no per-call-site duplication of the button/slider
-        // choice that the two paths could disagree on.
-        public void Apply(IXbox360Controller controller, bool pressed)
-        {
-            switch (Kind)
-            {
-                case ControlKind.Button:
-                    controller.SetButtonState(Button, pressed);
-                    break;
-                case ControlKind.Slider:
-                    controller.SetSliderValue(Slider, pressed ? (byte)255 : (byte)0);
-                    break;
-            }
-        }
-
-        public string Describe() => Kind == ControlKind.Button
-            ? $"Xbox360Button.{Button}"
-            : $"Xbox360Slider.{Slider}";
-    }
-
-    internal static readonly Dictionary<string, InputMapping> InputMap = new Dictionary<string, InputMapping>
-    {
-        ["A"] = InputMapping.ForButton("A", Xbox360Button.A, 0),
-        ["B"] = InputMapping.ForButton("B", Xbox360Button.B, 1),
-        ["X"] = InputMapping.ForButton("X", Xbox360Button.X, 2),
-        ["Y"] = InputMapping.ForButton("Y", Xbox360Button.Y, 3),
-        ["LB"] = InputMapping.ForButton("LB", Xbox360Button.LeftShoulder, 4),
-        ["RB"] = InputMapping.ForButton("RB", Xbox360Button.RightShoulder, 5),
-        ["LS"] = InputMapping.ForButton("LS", Xbox360Button.LeftThumb, 6),
-        ["RS"] = InputMapping.ForButton("RS", Xbox360Button.RightThumb, 7),
-        ["START"] = InputMapping.ForButton("START", Xbox360Button.Start, 8),
-        ["SELECT"] = InputMapping.ForButton("SELECT", Xbox360Button.Back, 9),
-        ["HOME"] = InputMapping.ForButton("HOME", Xbox360Button.Guide, 10),
-        ["DPAD_UP"] = InputMapping.ForButton("DPAD_UP", Xbox360Button.Up, 11),
-        ["DPAD_DOWN"] = InputMapping.ForButton("DPAD_DOWN", Xbox360Button.Down, 12),
-        ["DPAD_LEFT"] = InputMapping.ForButton("DPAD_LEFT", Xbox360Button.Left, 13),
-        ["DPAD_RIGHT"] = InputMapping.ForButton("DPAD_RIGHT", Xbox360Button.Right, 14),
-        ["LT"] = InputMapping.ForSlider("LT", Xbox360Slider.LeftTrigger, 15),
-        ["RT"] = InputMapping.ForSlider("RT", Xbox360Slider.RightTrigger, 16),
->>>>>>> theirs
     };
-    // =============== END EXPLICIT PROTOCOL-KEY -> OUTPUT MAPPING ===============
 
     // Per-player D-pad state tracking for proper POV/HAT axis handling.
     // Xbox 360 D-pad uses 8 directions (None, N, NE, E, SE, S, SW, W, NW).
@@ -757,30 +665,16 @@ class Program
 
                 string key = data.Substring(0, data.LastIndexOf('_'));
 
-<<<<<<< ours
                 // ===== TEMPORARY DIAGNOSTIC LOGGING =====
                 Console.WriteLine($"[SERVER_DIAG] MAP {key} pressed={pressed}");
-=======
-                if (InputDiagEnabled && InputDiagKeys.Contains(key))
-                {
-                    Console.WriteLine($"[SERVER RX] {data}  (parsed key=\"{key}\" pressed={pressed})");
-                }
->>>>>>> theirs
 
                 lock (player.Lock)
                 {
                     bool traceControl = ControllerTraceKeys.Contains(key);
                     var before = traceControl ? new ControllerReportSnapshot(controller) : default;
 
-                    // Single explicit lookup into InputMap - the ONE
-                    // table shared with ApplyButtonMask (STATE heartbeat)
-                    // below. No switch/positional/next-bit logic here: an
-                    // unrecognized key is simply not in the dictionary
-                    // and is ignored, exactly like the old switch's
-                    // default (no-match) fallthrough.
-                    if (InputMap.TryGetValue(key, out var mapping))
+                    switch (key)
                     {
-<<<<<<< ours
                         case "A":
                             controller.SetButtonState(Xbox360Button.A, pressed);
                             Console.WriteLine($"[SERVER_DIAG] VIGEM SetButtonState(A, {pressed})");
@@ -875,13 +769,6 @@ class Program
                             );
                             Console.WriteLine($"[SERVER_DIAG] VIGEM SetSliderValue(RightTrigger, {(pressed ? 255 : 0)})");
                             break;
-=======
-                        if (InputDiagEnabled && InputDiagKeys.Contains(key))
-                        {
-                            Console.WriteLine($"[MAP] {key} -> {mapping.Describe()} pressed={pressed}");
-                        }
-                        mapping.Apply(controller, pressed);
->>>>>>> theirs
                     }
 
                     if (traceControl)
@@ -996,22 +883,11 @@ class Program
                 if (!int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out int mask))
                     return;
 
-<<<<<<< ours
                 // ===== TEMPORARY DIAGNOSTIC LOGGING =====
                 Console.WriteLine($"[SERVER_DIAG] RX STATE seq={seq} mask={mask}");
                 for (int i = 10; i <= 16; i++)
                 {
                     Console.WriteLine($"[SERVER_DIAG] STATE bit {i}={(mask & (1 << i)) != 0}");
-=======
-                if (InputDiagEnabled)
-                {
-                    Console.WriteLine(
-                        $"[SERVER STATE] raw=\"{data}\" mask={mask} binary={Convert.ToString(mask, 2).PadLeft(17, '0')} " +
-                        $"HOME={(mask >> InputMap["HOME"].StateBit) & 1} UP={(mask >> InputMap["DPAD_UP"].StateBit) & 1} " +
-                        $"DOWN={(mask >> InputMap["DPAD_DOWN"].StateBit) & 1} " +
-                        $"LEFT={(mask >> InputMap["DPAD_LEFT"].StateBit) & 1} RIGHT={(mask >> InputMap["DPAD_RIGHT"].StateBit) & 1} " +
-                        $"LT={(mask >> InputMap["LT"].StateBit) & 1} RT={(mask >> InputMap["RT"].StateBit) & 1}");
->>>>>>> theirs
                 }
 
                 // STATE:seq:mask:leftX,leftY:rightX,rightY
@@ -1058,19 +934,7 @@ class Program
 
                     player.LastStateSeq = seq;
 
-<<<<<<< ours
                     ApplyButtonMask(controller, mask, player.DPad);
-=======
-                    var before = new ControllerReportSnapshot(controller);
-                    ApplyButtonMask(controller, mask);
-                    var after = new ControllerReportSnapshot(controller);
-                    if (!before.Equals(after))
-                    {
-                        Console.WriteLine(
-                            $"[CTRL STATE MUTATE] player={player.PlayerId} instance={player.ControllerInstanceId} " +
-                            $"userIndex={player.ControllerUserIndex} seq={seq} before({before}) after({after})");
-                    }
->>>>>>> theirs
 
                     // JOYSTICK AUTHORITY: JOY_L/JOY_R are now the ONLY
                     // packets allowed to write LeftThumbX/Y and
@@ -1106,7 +970,6 @@ class Program
         }
     }
 
-<<<<<<< ours
     static void ApplyButtonMask(IXbox360Controller controller, int mask, DPadState dpad)
     {
         // ===== TEMPORARY DIAGNOSTIC LOGGING =====
@@ -1128,29 +991,14 @@ class Program
         controller.SetDPadDirection(dpadDir);
         Console.WriteLine($"[SERVER_DIAG] VIGEM SetDPadDirection({dpadDir}) [bits 11-14: U={(mask & (1 << 11)) != 0} D={(mask & (1 << 12)) != 0} L={(mask & (1 << 13)) != 0} R={(mask & (1 << 14)) != 0}]");
 
+        const int LtBit = 15;
+        const int RtBit = 16;
         var ltVal = (mask & (1 << LtBit)) != 0 ? (byte)255 : (byte)0;
         var rtVal = (mask & (1 << RtBit)) != 0 ? (byte)255 : (byte)0;
         controller.SetSliderValue(Xbox360Slider.LeftTrigger, ltVal);
         controller.SetSliderValue(Xbox360Slider.RightTrigger, rtVal);
         Console.WriteLine($"[SERVER_DIAG] VIGEM SetSliderValue(LeftTrigger, {ltVal}) [bit {LtBit}]");
         Console.WriteLine($"[SERVER_DIAG] VIGEM SetSliderValue(RightTrigger, {rtVal}) [bit {RtBit}]");
-=======
-    // STATE heartbeat reconstruction. Uses the SAME InputMap dictionary as
-    // the _DOWN/_UP edge path above (via mapping.Apply) - there is no
-    // separate positional array here, so this cannot resolve one control
-    // using another control's mapping.
-    static void ApplyButtonMask(IXbox360Controller controller, int mask)
-    {
-        foreach (var mapping in InputMap.Values)
-        {
-            bool pressed = (mask & (1 << mapping.StateBit)) != 0;
-            if (InputDiagEnabled && mapping.StateBit >= 10 && mapping.StateBit <= 14)
-            {
-                Console.WriteLine($"[MAP STATE] bit={mapping.StateBit} -> {mapping.Describe()} pressed={pressed}");
-            }
-            mapping.Apply(controller, pressed);
-        }
->>>>>>> theirs
     }
 
     static void ApplyJoystickState(
@@ -1365,15 +1213,12 @@ class Program
             Console.WriteLine($"[{Environment.TickCount64}] [ReleaseAll] ctrl={controller.GetHashCode()}");
         }
 
-        // Same InputMap table as everywhere else - releasing "false"
-        // through mapping.Apply sets buttons to released and sliders to 0,
-        // so there is no separate button-array/slider-pair to keep in sync.
-        foreach (var mapping in InputMap.Values)
+        // Release all normal buttons via MaskButtons
+        foreach (var (bit, button) in MaskButtons)
         {
-            mapping.Apply(controller, false);
+            controller.SetButtonState(button, false);
         }
 
-<<<<<<< ours
         // Release D-pad to neutral
         if (player != null)
         {
@@ -1391,8 +1236,6 @@ class Program
         controller.SetSliderValue(Xbox360Slider.LeftTrigger, 0);
         controller.SetSliderValue(Xbox360Slider.RightTrigger, 0);
 
-=======
->>>>>>> theirs
         controller.SetAxisValue(Xbox360Axis.LeftThumbX, 0);
         controller.SetAxisValue(Xbox360Axis.LeftThumbY, 0);
         controller.SetAxisValue(Xbox360Axis.RightThumbX, 0);
