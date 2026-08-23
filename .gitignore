@@ -1,0 +1,10 @@
+.gradle/
+**/build/
+**/bin/
+**/obj/
+*.apk
+*.aab
+.idea/
+local.properties
+*.iml
+.vscode/

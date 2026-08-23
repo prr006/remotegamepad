@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RemoteGamepad</string>
+    <string name="status_disconnected">Disconnected</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_connected">Connected</string>
+    <string name="btn_scan">Scan for Devices</string>
+    <string name="btn_stop_scan">Stop Scan</string>
+    <string name="btn_disconnect">Disconnect</string>
+    <string name="btn_send_hello">Send HELLO</string>
+    <string name="btn_send_ping">Send PING</string>
+    <string name="label_paired">Paired Devices</string>
+    <string name="label_discovered">Discovered Devices</string>
+    <string name="label_log">Event Log</string>
+    <string name="hint_select_device">Tap a device to connect</string>
+    <string name="permission_required">Bluetooth permissions are required</string>
+    <string name="btn_back_to_devices">Back to Devices</string>
+    <string name="controller_connected">Controller active — touch to play</string>
+</resources>
