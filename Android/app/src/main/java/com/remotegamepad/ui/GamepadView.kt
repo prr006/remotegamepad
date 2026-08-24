@@ -186,24 +186,26 @@ class GamepadView @JvmOverloads constructor(
 
         val margin = minDim * 0.03f
 
-        // ── Sticks (lower half, left and right) ──
+        // ── Sticks (lower half, left and right) - FIXED POSITIONS from current_layout.jpg ──
+        // These positions are FINAL and must not be changed
         lsR = minDim * 0.14f
         lsKnobR = lsR * 0.42f
-        lsCx = margin + w * 0.18f
-        lsCy = h * 0.72f
+        lsCx = w * 0.3477f
+        lsCy = h * 0.7748f
         lsKnobX = lsCx
         lsKnobY = lsCy
 
         rsR = minDim * 0.14f
         rsKnobR = rsR * 0.42f
-        rsCx = w - margin - w * 0.18f
-        rsCy = h * 0.72f
+        rsCx = w * 0.6947f
+        rsCy = h * 0.7748f
         rsKnobX = rsCx
         rsKnobY = rsCy
 
-        // ── D-pad (upper-left) ──
-        val dpadCx = lsCx
-        val dpadCy = h * 0.28f
+        // ── D-pad (far-left control zone, below LT/LB) ──
+        // Positioned toward outer left edge with comfortable spacing from left stick
+        val dpadCx = w * 0.12f
+        val dpadCy = h * 0.40f
         val dArmLen = minDim * 0.09f
         val dArmW = minDim * 0.055f
         dpadRects.clear()
@@ -212,35 +214,41 @@ class GamepadView @JvmOverloads constructor(
         dpadRects["dLeft"]  = RectF(dpadCx - dArmLen * 2f, dpadCy - dArmW, dpadCx, dpadCy + dArmW)
         dpadRects["dRight"] = RectF(dpadCx, dpadCy - dArmW, dpadCx + dArmLen * 2f, dpadCy + dArmW)
 
-        // ── ABXY (upper-right, diamond) ──
-        val abxyCx = rsCx
-        val abxyCy = h * 0.28f
-        val br = minDim * 0.065f
-        val offset = br * 1.35f
+        // ── ABXY (far-right control zone, below RB/RT) ──
+        // Positioned toward outer right edge with comfortable spacing from right stick
+        val abxyCx = w * 0.88f
+        val abxyCy = h * 0.36f
+        val br = minDim * 0.045f
+        val offset = br * 2.2f
         abxyRects.clear()
         abxyRects["y"] = makeRect(abxyCx, abxyCy - offset, br)
         abxyRects["x"] = makeRect(abxyCx - offset, abxyCy, br)
         abxyRects["b"] = makeRect(abxyCx + offset, abxyCy, br)
         abxyRects["a"] = makeRect(abxyCx, abxyCy + offset, br)
 
-        // ── Shoulder buttons (top row) ──
-        val shW = w * 0.16f
+        // ── Shoulder buttons (top row - outer areas) ──
+        // LT/LB in upper-left outer area, RB/RT in upper-right outer area
+        val shW = w * 0.14f
         val shH = minDim * 0.055f
         shoulderRects.clear()
         shoulderRects["lb"] = RectF(margin, margin, margin + shW, margin + shH)
         shoulderRects["rb"] = RectF(w - margin - shW, margin, w - margin, margin + shH)
 
-        // ── Select / Start (center top, below shoulders) ──
-        val cW = w * 0.11f
+        // ── VIEW / HOME / MENU (center top, below shoulders) ──
+        val cW = w * 0.09f
         val cH = minDim * 0.045f
-        val cY = margin + shH + minDim * 0.02f
-        shoulderRects["select"] = RectF(w / 2f - cW - minDim * 0.015f, cY, w / 2f - minDim * 0.015f, cY + cH)
-        shoulderRects["start"]  = RectF(w / 2f + minDim * 0.015f, cY, w / 2f + cW + minDim * 0.015f, cY + cH)
+        val cY = margin + shH + minDim * 0.025f
+        val centerGap = minDim * 0.018f
+        shoulderRects["view"]   = RectF(w / 2f - cW - centerGap, cY, w / 2f - centerGap / 2f, cY + cH)
+        shoulderRects["home"]   = RectF(w / 2f - centerGap / 2f, cY, w / 2f + centerGap / 2f, cY + cH)
+        shoulderRects["menu"]   = RectF(w / 2f + centerGap / 2f, cY, w / 2f + cW + centerGap, cY + cH)
 
-        // ── L3 / R3 (bottom corners) ──
-        val smallR = minDim * 0.045f
-        l3Rect.set(margin, h - margin - smallR * 2f, margin + smallR * 2f, h - margin)
-        r3Rect.set(w - margin - smallR * 2f, h - margin - smallR * 2f, w - margin, h - margin)
+        // ── L3 / R3 (bottom outer corners) ──
+        // Positioned in lower-left and lower-right outer areas with breathing space
+        val smallBtnW = minDim * 0.05f
+        val smallBtnH = minDim * 0.025f
+        l3Rect.set(margin, h - margin - smallBtnH * 1.2f, margin + smallBtnW, h - margin)
+        r3Rect.set(w - margin - smallBtnW, h - margin - smallBtnH * 1.2f, w - margin, h - margin)
     }
 
     private fun makeRect(cx: Float, cy: Float, radius: Float): RectF {
