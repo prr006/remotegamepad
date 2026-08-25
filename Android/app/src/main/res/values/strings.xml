@@ -4,8 +4,8 @@
     <string name="status_disconnected">Disconnected</string>
     <string name="status_connecting">Connecting…</string>
     <string name="status_connected">Connected</string>
-    <string name="btn_scan">Scan for Devices</string>
-    <string name="btn_stop_scan">Stop Scan</string>
+    <string name="btn_scan">Scan for devices</string>
+    <string name="btn_stop_scan">Stop scanning</string>
     <string name="btn_disconnect">Disconnect</string>
     <string name="btn_send_hello">Send HELLO</string>
     <string name="btn_send_ping">Send PING</string>
@@ -16,4 +16,26 @@
     <string name="permission_required">Bluetooth permissions are required</string>
     <string name="btn_back_to_devices">Back to Devices</string>
     <string name="controller_connected">Controller active — touch to play</string>
+
+    <!-- Home screen -->
+    <string name="home_subtitle">Connect to your PC</string>
+    <string name="home_bluetooth_title">Bluetooth</string>
+    <string name="home_bluetooth_subtitle">Connect via Bluetooth</string>
+    <string name="home_wifi_title">Wi-Fi</string>
+    <string name="home_wifi_subtitle">Coming Soon</string>
+
+    <!-- Bluetooth connector screen -->
+    <string name="connect_title">Connect via Bluetooth</string>
+    <string name="connect_subtitle">Select your PC to connect</string>
+    <string name="section_paired">PAIRED</string>
+    <string name="section_available">AVAILABLE</string>
+    <string name="no_devices_found">No devices found</string>
+    <string name="no_devices_hint">Make sure your PC\'s Bluetooth is turned on and try scanning again.</string>
+    <string name="connecting_to_device">Connecting\u2026</string>
+    <string name="connection_failed">Connection failed</string>
+
+    <!-- Controller style -->
+    <string name="controller_style_title">Controller Style</string>
+    <string name="style_xbox">Xbox</string>
+    <string name="style_ps">PlayStation</string>
 </resources>

@@ -12,4 +12,12 @@
     <color name="status_orange">#FFFF9800</color>
     <color name="log_bg">#FF1E1E1E</color>
     <color name="log_text">#FFEEEEEE</color>
+
+    <!-- Home screen accent & surfaces -->
+    <color name="accent">#FF4E8EF7</color>
+    <color name="accent_dim">#FF3A6FCC</color>
+    <color name="surface">#FF161618</color>
+    <color name="surface_light">#FF222226</color>
+    <color name="text_secondary">#FF8E8E93</color>
+    <color name="text_hint">#FF636366</color>
 </resources>

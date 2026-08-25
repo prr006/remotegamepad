@@ -8,6 +8,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -16,6 +17,8 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -26,15 +29,18 @@ import com.remotegamepad.bluetooth.BluetoothService
 import com.remotegamepad.bluetooth.GamepadState
 import com.remotegamepad.bluetooth.Protocol
 import com.remotegamepad.databinding.ActivityMainBinding
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class MainActivity : AppCompatActivity(), BluetoothService.Callback, GamepadView.Listener {
 
     companion object {
         private const val TAG = "MainActivity"
+        private const val PREFS_NAME = "remote_gamepad_prefs"
+        private const val KEY_CONTROLLER_STYLE = "controller_style"
     }
+
+    // ── Screen navigation ──
+    private enum class Screen { HOME, CONNECT, GAMEPAD }
+    private var currentScreen = Screen.HOME
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var bluetoothService: BluetoothService
@@ -42,13 +48,13 @@ class MainActivity : AppCompatActivity(), BluetoothService.Callback, GamepadView
         (getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
     }
 
-    private val pairedAdapter = DeviceAdapter { device -> connectTo(device) }
-    private val discoveredAdapter = DeviceAdapter { device -> connectTo(device) }
+    private val pairedAdapter = DeviceAdapter(showPairedBadge = true) { device -> connectTo(device) }
+    private val discoveredAdapter = DeviceAdapter(showPairedBadge = false) { device -> connectTo(device) }
     private val discoveredDevices = mutableListOf<BluetoothDevice>()
-    private val sdf = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
     private var lastSentState: GamepadState? = null
 
     private var isScanning = false
+    private var connectingDeviceName: String? = null
 
     // Permission launcher
     private val permissionLauncher = registerForActivityResult(
@@ -56,13 +62,13 @@ class MainActivity : AppCompatActivity(), BluetoothService.Callback, GamepadView
     ) { permissions ->
         val allGranted = permissions.entries.all { it.value }
         if (allGranted) {
-            log("Permissions granted")
+            Log.d(TAG, "Permissions granted")
             loadPairedDevices()
         } else {
-            log("Permissions denied — Bluetooth unavailable")
+            Log.w(TAG, "Permissions denied")
             AlertDialog.Builder(this)
                 .setTitle("Permissions Required")
-                .setMessage("Bluetooth and location permissions are needed to discover and connect to the Windows server.")
+                .setMessage("Bluetooth and location permissions are needed to discover and connect to your PC.")
                 .setPositiveButton("OK") { _, _ -> }
                 .show()
         }
@@ -84,19 +90,18 @@ class MainActivity : AppCompatActivity(), BluetoothService.Callback, GamepadView
                         if (it.name != null && discoveredDevices.none { d -> d.address == it.address }) {
                             discoveredDevices.add(it)
                             discoveredAdapter.submitList(discoveredDevices.toList())
-                            log("Discovered: ${it.name} [${it.address}]")
+                            updateEmptyState()
+                            Log.d(TAG, "Discovered: ${it.name}")
                         }
                     }
                 }
                 BluetoothAdapter.ACTION_DISCOVERY_STARTED -> {
                     isScanning = true
                     binding.btnScan.text = getString(com.remotegamepad.R.string.btn_stop_scan)
-                    log("Discovery started")
                 }
                 BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
                     isScanning = false
                     binding.btnScan.text = getString(com.remotegamepad.R.string.btn_scan)
-                    log("Discovery finished")
                 }
             }
         }
@@ -113,6 +118,8 @@ class MainActivity : AppCompatActivity(), BluetoothService.Callback, GamepadView
         setupRecyclerViews()
         setupButtons()
         setupGamepad()
+        setupNavigation()
+        setupControllerStyle()
         registerReceivers()
         checkPermissions()
     }
@@ -143,39 +150,148 @@ class MainActivity : AppCompatActivity(), BluetoothService.Callback, GamepadView
                 startDiscovery()
             }
         }
-
-        binding.btnDisconnect.setOnClickListener {
-            log("Disconnecting...")
-            bluetoothService.disconnect()
-        }
-
-        binding.btnSendHello.setOnClickListener {
-            if (bluetoothService.send(Protocol.MSG_HELLO)) {
-                log("→ Sent: HELLO")
-            } else {
-                log("× Failed to send HELLO")
-            }
-        }
-
-        binding.btnSendPing.setOnClickListener {
-            if (bluetoothService.send(Protocol.MSG_PING)) {
-                log("→ Sent: PING")
-            } else {
-                log("× Failed to send PING")
-            }
-        }
     }
 
     private fun setupGamepad() {
         binding.gamepadView.listener = this
+        // Restore persisted controller style
+        val savedStyle = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .getString(KEY_CONTROLLER_STYLE, GamepadView.ControllerStyle.XBOX.name)
+        binding.gamepadView.controllerStyle = try {
+            GamepadView.ControllerStyle.valueOf(savedStyle!!)
+        } catch (_: Exception) {
+            GamepadView.ControllerStyle.XBOX
+        }
+    }
+
+    private fun setupControllerStyle() {
+        binding.btnControllerStyle.setOnClickListener {
+            showControllerStyleDialog()
+        }
+    }
+
+    private fun showControllerStyleDialog() {
+        val styles = GamepadView.ControllerStyle.values()
+        val labels = styles.map { style ->
+            when (style) {
+                GamepadView.ControllerStyle.XBOX -> getString(com.remotegamepad.R.string.style_xbox)
+                GamepadView.ControllerStyle.PS -> getString(com.remotegamepad.R.string.style_ps)
+            }
+        }.toTypedArray()
+        val currentIndex = styles.indexOf(binding.gamepadView.controllerStyle)
+
+        AlertDialog.Builder(this)
+            .setTitle(com.remotegamepad.R.string.controller_style_title)
+            .setSingleChoiceItems(labels, currentIndex) { dialog: android.content.DialogInterface, which: Int ->
+                val selected = styles[which]
+                binding.gamepadView.controllerStyle = selected
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                    .edit()
+                    .putString(KEY_CONTROLLER_STYLE, selected.name)
+                    .apply()
+                dialog.dismiss()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun setupNavigation() {
+        // Home → Bluetooth connector
+        binding.cardBluetooth.setOnClickListener {
+            showConnect()
+        }
+
+        // Connector screen back arrow
+        binding.btnBack.setOnClickListener {
+            if (isScanning) stopDiscovery()
+            bluetoothService.disconnect()
+            showHome()
+        }
+
+        // System back button handling
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                when (currentScreen) {
+                    Screen.GAMEPAD -> {
+                        bluetoothService.disconnect()
+                        showConnect()
+                    }
+                    Screen.CONNECT -> {
+                        if (isScanning) stopDiscovery()
+                        bluetoothService.disconnect()
+                        showHome()
+                    }
+                    Screen.HOME -> {
+                        finish()
+                    }
+                }
+            }
+        })
+    }
+
+    // ── Screen navigation ──
+
+    private fun showHome() {
+        currentScreen = Screen.HOME
+        binding.layoutHome.visibility = View.VISIBLE
+        binding.layoutConnection.visibility = View.GONE
+        binding.gamepadView.visibility = View.GONE
+        setGamepadOrientation(active = false)
+    }
+
+    private fun showConnect() {
+        currentScreen = Screen.CONNECT
+        binding.layoutHome.visibility = View.GONE
+        binding.layoutConnection.visibility = View.VISIBLE
+        binding.gamepadView.visibility = View.GONE
+        setGamepadOrientation(active = false)
+        updateEmptyState()
+    }
+
+    private fun showGamepad() {
+        currentScreen = Screen.GAMEPAD
+        binding.layoutHome.visibility = View.GONE
+        binding.layoutConnection.visibility = View.GONE
+        binding.gamepadView.visibility = View.VISIBLE
+        setGamepadOrientation(active = true)
+    }
+
+    private fun setGamepadOrientation(active: Boolean) {
+        requestedOrientation = if (active) {
+            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+    }
+
+    // ── Empty state management ──
+
+    private fun updateEmptyState() {
+        val hasPaired = pairedAdapter.itemCount > 0
+        val hasDiscovered = discoveredAdapter.itemCount > 0
+        val hasDevices = hasPaired || hasDiscovered
+
+        binding.emptyState.visibility = if (hasDevices) View.GONE else View.VISIBLE
+        binding.deviceListScroll.visibility = if (hasDevices) View.VISIBLE else View.GONE
+        binding.pairedSectionHeader.visibility = if (hasPaired) View.VISIBLE else View.GONE
+        binding.discoveredSectionHeader.visibility = if (hasDiscovered) View.VISIBLE else View.GONE
+    }
+
+    private fun showConnectingState(deviceName: String?) {
+        connectingDeviceName = deviceName
+        binding.connectingIndicator.visibility = View.VISIBLE
+        binding.tvConnectingText.text = getString(com.remotegamepad.R.string.connecting_to_device)
+    }
+
+    private fun hideConnectingState() {
+        connectingDeviceName = null
+        binding.connectingIndicator.visibility = View.GONE
     }
     //endregion
 
     //region GamepadView.Listener
     override fun onStateChanged(state: GamepadState) {
         if (!bluetoothService.isConnected()) return
-        // Only send when state actually changed to avoid flooding
-        // the Bluetooth channel with redundant stick-move messages.
         if (lastSentState != state) {
             lastSentState = state
             bluetoothService.send(state.toProtocolMessage())
@@ -236,22 +352,22 @@ class MainActivity : AppCompatActivity(), BluetoothService.Callback, GamepadView
         }
         val paired = bluetoothAdapter?.bondedDevices?.toList() ?: emptyList()
         pairedAdapter.submitList(paired)
-        log("Loaded ${paired.size} paired device(s)")
+        updateEmptyState()
     }
 
     private fun startDiscovery() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN)
             != PackageManager.PERMISSION_GRANTED) {
-            log("BLUETOOTH_SCAN permission missing")
             return
         }
         discoveredDevices.clear()
         discoveredAdapter.submitList(emptyList())
+        updateEmptyState()
         bluetoothAdapter?.cancelDiscovery()
         val started = bluetoothAdapter?.startDiscovery() ?: false
         if (!started) {
-            log("Failed to start discovery")
+            Log.w(TAG, "Failed to start discovery")
         }
     }
 
@@ -263,7 +379,7 @@ class MainActivity : AppCompatActivity(), BluetoothService.Callback, GamepadView
     //region Connection
     private fun connectTo(device: BluetoothDevice) {
         if (isScanning) stopDiscovery()
-        log("Connecting to ${device.name ?: "Unknown"} [${device.address}]...")
+        showConnectingState(device.name)
         bluetoothService.connect(device)
     }
     //endregion
@@ -272,71 +388,45 @@ class MainActivity : AppCompatActivity(), BluetoothService.Callback, GamepadView
     override fun onStateChanged(state: BluetoothService.State) {
         when (state) {
             is BluetoothService.State.Disconnected -> {
-                binding.tvStatus.text = getString(com.remotegamepad.R.string.status_disconnected)
-                binding.statusIndicator.setBackgroundResource(com.remotegamepad.R.drawable.circle_red)
-                binding.btnDisconnect.visibility = View.GONE
-                binding.btnSendHello.isEnabled = false
-                binding.btnSendPing.isEnabled = false
-                binding.layoutConnection.visibility = View.VISIBLE
-                binding.gamepadView.visibility = View.GONE
-                log("State: Disconnected")
+                hideConnectingState()
+                if (currentScreen == Screen.GAMEPAD) {
+                    showConnect()
+                }
+                Log.d(TAG, "State: Disconnected")
             }
             is BluetoothService.State.Connecting -> {
-                binding.tvStatus.text = getString(com.remotegamepad.R.string.status_connecting)
-                binding.statusIndicator.setBackgroundResource(com.remotegamepad.R.drawable.circle_orange)
-                binding.btnDisconnect.visibility = View.VISIBLE
-                binding.btnSendHello.isEnabled = false
-                binding.btnSendPing.isEnabled = false
-                binding.layoutConnection.visibility = View.VISIBLE
-                binding.gamepadView.visibility = View.GONE
-                log("State: Connecting")
+                Log.d(TAG, "State: Connecting")
             }
             is BluetoothService.State.Connected -> {
-                binding.tvStatus.text = getString(com.remotegamepad.R.string.controller_connected)
-                binding.statusIndicator.setBackgroundResource(com.remotegamepad.R.drawable.circle_green)
-                binding.btnDisconnect.visibility = View.VISIBLE
-                binding.btnSendHello.isEnabled = true
-                binding.btnSendPing.isEnabled = true
-                binding.layoutConnection.visibility = View.GONE
-                binding.gamepadView.visibility = View.VISIBLE
-                log("State: Connected — Controller active")
+                hideConnectingState()
+                showGamepad()
+                Log.d(TAG, "State: Connected")
             }
             is BluetoothService.State.Error -> {
-                binding.tvStatus.text = "Error: ${state.reason}"
-                binding.statusIndicator.setBackgroundResource(com.remotegamepad.R.drawable.circle_red)
-                binding.btnDisconnect.visibility = View.GONE
-                binding.btnSendHello.isEnabled = false
-                binding.btnSendPing.isEnabled = false
-                binding.layoutConnection.visibility = View.VISIBLE
-                binding.gamepadView.visibility = View.GONE
-                log("State: Error — ${state.reason}")
+                hideConnectingState()
+                if (currentScreen == Screen.GAMEPAD) {
+                    showConnect()
+                }
+                Toast.makeText(this, getString(com.remotegamepad.R.string.connection_failed), Toast.LENGTH_SHORT).show()
+                Log.d(TAG, "State: Error — ${state.reason}")
             }
         }
     }
 
     override fun onMessageReceived(message: String) {
-        log("← Received: $message")
+        Log.d(TAG, "Received: $message")
     }
 
     override fun onError(message: String) {
-        log("! Error: $message")
-    }
-    //endregion
-
-    //region Logging
-    private fun log(msg: String) {
-        val line = "[${sdf.format(Date())}] $msg\n"
-        Log.d(TAG, msg)
-        binding.tvLog.append(line)
-        binding.scrollView.post {
-            binding.scrollView.fullScroll(View.FOCUS_DOWN)
-        }
+        Log.e(TAG, "Error: $message")
     }
     //endregion
 
     //region DeviceAdapter
-    class DeviceAdapter(private val onClick: (BluetoothDevice) -> Unit) :
-        RecyclerView.Adapter<DeviceAdapter.ViewHolder>() {
+    class DeviceAdapter(
+        private val showPairedBadge: Boolean = false,
+        private val onClick: (BluetoothDevice) -> Unit
+    ) : RecyclerView.Adapter<DeviceAdapter.ViewHolder>() {
 
         private var devices: List<BluetoothDevice> = emptyList()
 
@@ -359,11 +449,11 @@ class MainActivity : AppCompatActivity(), BluetoothService.Callback, GamepadView
 
         inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
             private val tvName: TextView = itemView.findViewById(com.remotegamepad.R.id.tvDeviceName)
-            private val tvAddress: TextView = itemView.findViewById(com.remotegamepad.R.id.tvDeviceAddress)
+            private val tvBadge: TextView = itemView.findViewById(com.remotegamepad.R.id.tvDeviceBadge)
 
             fun bind(device: BluetoothDevice) {
                 tvName.text = device.name ?: "Unknown"
-                tvAddress.text = device.address
+                tvBadge.visibility = if (showPairedBadge) View.VISIBLE else View.GONE
                 itemView.setOnClickListener { onClick(device) }
             }
         }
