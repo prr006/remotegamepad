@@ -55,7 +55,7 @@ dotnet run -c Release
 In a second terminal verify the device and events:
 
 ```sh
-grep -A8 -B2 RemoteGamepad /proc/bus/input/devices
+grep -A8 -B2 'Xbox 360 Controller' /proc/bus/input/devices
 sudo evtest /dev/input/eventN   # replace eventN with the device node shown above
 ```
 
@@ -83,7 +83,7 @@ Open UDP 26760 and 26761 in the host firewall on the trusted local network. `Ctr
 
 ## Controller mapping
 
-The implementation follows the [Linux kernel gamepad specification](https://docs.kernel.org/input/gamepad.html) geometry, not the historical symbolic aliases: Android `X` is the physical left face button and emits `BTN_WEST` (kernel alias `BTN_Y`); Android `Y` is the top face button and emits `BTN_NORTH` (kernel alias `BTN_X`). A/B map to `BTN_SOUTH`/`BTN_EAST`. LB/RB, Start/Select, and stick clicks map to `BTN_TL`, `BTN_TR`, `BTN_START`, `BTN_SELECT`, `BTN_THUMBL`, and `BTN_THUMBR`. Left/right sticks use `ABS_X/Y` and `ABS_RX/RY` with negative X left and negative Y up. LT/RT use common Xbox evdev analog axes `ABS_Z`/`ABS_RZ` with range 0–255. D-pad emits matching `BTN_DPAD_*` press/release events and `ABS_HAT0X/Y` values (-1..1); up/left are negative; simultaneous opposites resolve to neutral on that axis so the key and hat representations cannot disagree.
+The virtual input identity is BUS `0x03`, VID `0x045e`, PID `0x028e`, version `0x0114`, name `Xbox 360 Controller`. The implementation follows the [Linux kernel gamepad specification](https://docs.kernel.org/input/gamepad.html) geometry, not the historical symbolic aliases: Android `X` is the physical left face button and emits `BTN_WEST` (kernel alias `BTN_Y`); Android `Y` is the top face button and emits `BTN_NORTH` (kernel alias `BTN_X`). A/B map to `BTN_SOUTH`/`BTN_EAST`. LB/RB, Start/Select, and stick clicks map to `BTN_TL`, `BTN_TR`, `BTN_START`, `BTN_SELECT`, `BTN_THUMBL`, and `BTN_THUMBR`. Left/right sticks use `ABS_X/Y` and `ABS_RX/RY` with negative X left and negative Y up. LT/RT use common Xbox evdev analog axes `ABS_Z`/`ABS_RZ` with range 0–255. D-pad is represented only by `ABS_HAT0X/Y` (-1..1); up/left are negative; simultaneous opposites resolve to neutral on that axis.
 
 ## Bluetooth Classic / SPP
 
