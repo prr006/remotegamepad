@@ -12,10 +12,9 @@ public sealed class VirtualController : IDisposable
     // Linux input_event.code is __u16; model event codes with that exact width.
     private const ushort ABS_X = 0, ABS_Y = 1, ABS_RX = 3, ABS_RY = 4, ABS_Z = 2, ABS_RZ = 5, ABS_HAT0X = 16, ABS_HAT0Y = 17;
     private const ushort BTN_SOUTH = 0x130, BTN_EAST = 0x131, BTN_NORTH = 0x133, BTN_WEST = 0x134;
-    private const ushort BTN_TL = 0x136, BTN_TR = 0x137, BTN_SELECT = 0x13a, BTN_START = 0x13b, BTN_THUMBL = 0x13d, BTN_THUMBR = 0x13e;
-    // Android labels follow Xbox physical positions: X is left/WEST; Y is top/NORTH.
-    // Linux's historical BTN_X alias is BTN_NORTH and BTN_Y alias is BTN_WEST,
-    // so map Android labels to the physical-position codes explicitly.
+    private const ushort BTN_TL = 0x136, BTN_TR = 0x137, BTN_SELECT = 0x13a, BTN_START = 0x13b, BTN_MODE = 0x13c, BTN_THUMBL = 0x13d, BTN_THUMBR = 0x13e;
+    // Xbox 360 xpad physical layout: X/top -> BTN_NORTH; Y/left -> BTN_WEST.
+    // BTN_MODE (Guide) is advertised at button index 8; Android currently sends no Guide state.
     // Triggers use Xbox-style ABS_Z (LT) and ABS_RZ (RT), each 0..255.
     // D-pad is represented only by ABS_HAT0X/Y.
     private readonly object _sync = new();
@@ -39,7 +38,7 @@ public sealed class VirtualController : IDisposable
         try
         {
             SetBit(IOC(1, 'U', 100, 4), EV_SYN); SetBit(IOC(1, 'U', 100, 4), EV_KEY); SetBit(IOC(1, 'U', 100, 4), EV_ABS);
-            foreach (var key in new[] { BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST, BTN_TL, BTN_TR, BTN_SELECT, BTN_START, BTN_THUMBL, BTN_THUMBR }) SetBit(IOC(1, 'U', 101, 4), key);
+            foreach (var key in new[] { BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST, BTN_TL, BTN_TR, BTN_SELECT, BTN_START, BTN_MODE, BTN_THUMBL, BTN_THUMBR }) SetBit(IOC(1, 'U', 101, 4), key);
             foreach (var abs in new[] { ABS_X, ABS_Y, ABS_RX, ABS_RY, ABS_Z, ABS_RZ, ABS_HAT0X, ABS_HAT0Y }) SetBit(IOC(1, 'U', 103, 4), abs);
             var setup = new UInputSetup { Id = new InputId { Bus = 0x03, Vendor = 0x045e, Product = 0x028e, Version = 0x0114 }, Name = "Xbox 360 Controller" };
             if (ioctl(_fd, IOC(1, 'U', 3, Marshal.SizeOf<UInputSetup>()), ref setup) < 0) Fail("UI_DEV_SETUP");
@@ -62,14 +61,14 @@ public sealed class VirtualController : IDisposable
             var dpadY = ResolveDpadAxis(s.DUp, s.DDown);
             foreach (var (key, value) in new[]
             {
-                (BTN_SOUTH, s.A), (BTN_EAST, s.B), (BTN_WEST, s.X), (BTN_NORTH, s.Y),
+                (BTN_SOUTH, s.A), (BTN_EAST, s.B), (BTN_NORTH, s.X), (BTN_WEST, s.Y),
                 (BTN_TL, s.Lb), (BTN_TR, s.Rb), (BTN_START, s.Start), (BTN_SELECT, s.Select),
                 (BTN_THUMBL, s.L3), (BTN_THUMBR, s.R3)
             }) Key(key, value);
             Axis(ABS_X, Scale(s.Lx));
-            Axis(ABS_Y, Scale(s.Ly));
+            Axis(ABS_Y, Scale(-s.Ly));
             Axis(ABS_RX, Scale(s.Rx));
-            Axis(ABS_RY, Scale(s.Ry));
+            Axis(ABS_RY, Scale(-s.Ry));
             Axis(ABS_Z, (int)(Math.Clamp(s.Lt, 0f, 1f) * 255));
             Axis(ABS_RZ, (int)(Math.Clamp(s.Rt, 0f, 1f) * 255));
             Axis(ABS_HAT0X, dpadX);
@@ -80,8 +79,8 @@ public sealed class VirtualController : IDisposable
                 var previous = _hasLastState ? _lastState : default;
                 TraceButtonChange("A", s.A, previous.A, "BTN_SOUTH");
                 TraceButtonChange("B", s.B, previous.B, "BTN_EAST");
-                TraceButtonChange("X", s.X, previous.X, "BTN_WEST");
-                TraceButtonChange("Y", s.Y, previous.Y, "BTN_NORTH");
+                TraceButtonChange("X", s.X, previous.X, "BTN_NORTH");
+                TraceButtonChange("Y", s.Y, previous.Y, "BTN_WEST");
                 TraceButtonChange("LB", s.Lb, previous.Lb, "BTN_TL");
                 TraceButtonChange("RB", s.Rb, previous.Rb, "BTN_TR");
                 TraceButtonChange("Start", s.Start, previous.Start, "BTN_START");
@@ -96,7 +95,7 @@ public sealed class VirtualController : IDisposable
                 var now = Environment.TickCount64;
                 if (HasAnalogChange(s, previous) && now - _lastTraceTick >= 250)
                 {
-                    Console.WriteLine($"[MAP] lx={s.Lx:F2}->ABS_X ly={s.Ly:F2}->ABS_Y rx={s.Rx:F2}->ABS_RX ry={s.Ry:F2}->ABS_RY lt={s.Lt:F2}->ABS_Z rt={s.Rt:F2}->ABS_RZ");
+                    Console.WriteLine($"[MAP] lx={s.Lx:F2}->ABS_X={Scale(s.Lx)} ly={s.Ly:F2}->ABS_Y={Scale(-s.Ly)} rx={s.Rx:F2}->ABS_RX={Scale(s.Rx)} ry={s.Ry:F2}->ABS_RY={Scale(-s.Ry)} lt={s.Lt:F2}->ABS_Z={(int)(Math.Clamp(s.Lt, 0f, 1f) * 255)} rt={s.Rt:F2}->ABS_RZ={(int)(Math.Clamp(s.Rt, 0f, 1f) * 255)}");
                     _lastTraceTick = now;
                 }
             }
@@ -127,8 +126,8 @@ public sealed class VirtualController : IDisposable
         {
             ("A -> BTN_SOUTH", neutral with { A = true }),
             ("B -> BTN_EAST", neutral with { B = true }),
-            ("X (left physical button) -> BTN_WEST", neutral with { X = true }),
-            ("Y (top physical button) -> BTN_NORTH", neutral with { Y = true }),
+            ("X (top physical button) -> BTN_NORTH", neutral with { X = true }),
+            ("Y (left physical button) -> BTN_WEST", neutral with { Y = true }),
             ("LB -> BTN_TL", neutral with { Lb = true }),
             ("RB -> BTN_TR", neutral with { Rb = true }),
             ("Start -> BTN_START", neutral with { Start = true }),
@@ -145,12 +144,12 @@ public sealed class VirtualController : IDisposable
             ("RT full -> ABS_RZ(255)", neutral with { Rt = 1f }),
             ("Left X left/right -> ABS_X(-32768/+32767)", neutral with { Lx = -1f }),
             ("Left X right -> ABS_X(+32767)", neutral with { Lx = 1f }),
-            ("Left Y up/down -> ABS_Y(-32768/+32767)", neutral with { Ly = -1f }),
-            ("Left Y down -> ABS_Y(+32767)", neutral with { Ly = 1f }),
+            ("Left Y up (Android +1) -> ABS_Y(-32768)", neutral with { Ly = 1f }),
+            ("Left Y down (Android -1) -> ABS_Y(+32767)", neutral with { Ly = -1f }),
             ("Right X left/right -> ABS_RX(-32768/+32767)", neutral with { Rx = -1f }),
             ("Right X right -> ABS_RX(+32767)", neutral with { Rx = 1f }),
-            ("Right Y up/down -> ABS_RY(-32768/+32767)", neutral with { Ry = -1f }),
-            ("Right Y down -> ABS_RY(+32767)", neutral with { Ry = 1f }),
+            ("Right Y up (Android +1) -> ABS_RY(-32768)", neutral with { Ry = 1f }),
+            ("Right Y down (Android -1) -> ABS_RY(+32767)", neutral with { Ry = -1f }),
         };
 
         foreach (var (label, state) in tests)
