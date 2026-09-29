@@ -4,7 +4,7 @@ using InTheHand.Net.Bluetooth;
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
+using System.Security.Cryptography;
 
 /// <summary>BlueZ RFCOMM/SPP server with native RFCOMM sockets and BlueZ SDP tooling.</summary>
 public sealed class BluetoothServer : IDisposable
@@ -65,21 +65,13 @@ public sealed class BluetoothServer : IDisposable
 
     private void RegisterSdpRecord()
     {
-        var before = ReadSdpHandles();
-        RunBluezTool("sdptool", "add", "--channel=1", "SP");
-        var added = ReadSdpHandles().Except(before, StringComparer.OrdinalIgnoreCase).ToArray();
-        if (added.Length == 0)
-            throw new InvalidOperationException("sdptool did not expose a new SPP SDP record handle.");
-        _sdpRecordHandle = added[0];
-        Console.WriteLine($"[BT] SPP SDP record registered (handle {_sdpRecordHandle})");
-    }
-
-    private static HashSet<string> ReadSdpHandles()
-    {
-        var output = RunBluezTool("sdptool", "browse", "local");
-        return Regex.Matches(output, @"Service RecHandle:\s*(0x[0-9a-fA-F]+)")
-            .Select(match => match.Groups[1].Value)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Request the record handle up front. This avoids `sdptool browse local`,
+        // which is a separate SDP query and can fail under different inherited
+        // credentials even when registration itself is permitted.
+        var handle = $"0x{RandomNumberGenerator.GetInt32(0x00010000, 0x7fffffff):X8}";
+        var output = RunBluezTool("sdptool", "add", $"--handle={handle}", "--channel=1", "SP");
+        _sdpRecordHandle = handle;
+        Console.WriteLine($"[BT] SPP SDP record registered (handle {handle}): {output.Trim()}");
     }
 
     private static string RunBluezTool(string tool, params string[] args)
@@ -103,8 +95,25 @@ public sealed class BluetoothServer : IDisposable
         var stdout = stdoutTask.GetAwaiter().GetResult();
         var stderr = stderrTask.GetAwaiter().GetResult();
         if (process.ExitCode != 0)
-            throw new IOException($"{tool} {string.Join(' ', args)} failed ({process.ExitCode}): {stderr.Trim()} {stdout.Trim()}");
+            throw new IOException(
+                $"{tool} {string.Join(' ', args)} failed ({process.ExitCode}): {stderr.Trim()} {stdout.Trim()} " +
+                $"Server process credentials: {DescribeProcessCredentials()}. Child processes inherit the server's supplementary groups; " +
+                "if bluetooth group membership was changed, fully restart the server process/session and compare its Groups line in /proc/<pid>/status with `id -G`."
+            );
         return stdout;
+    }
+
+    private static string DescribeProcessCredentials()
+    {
+        try
+        {
+            var wanted = File.ReadLines("/proc/self/status")
+                .Where(line => line.StartsWith("Uid:", StringComparison.Ordinal) ||
+                               line.StartsWith("Gid:", StringComparison.Ordinal) ||
+                               line.StartsWith("Groups:", StringComparison.Ordinal));
+            return $"user={Environment.UserName}; {string.Join("; ", wanted)}";
+        }
+        catch (Exception ex) { return $"user={Environment.UserName}; /proc credentials unavailable: {ex.Message}"; }
     }
 
     private void UnregisterSdpRecord()
