@@ -8,9 +8,10 @@ public sealed class VirtualController : IDisposable
     private const int O_WRONLY = 1, O_NONBLOCK = 0x800;
     private const int EV_SYN = 0, EV_KEY = 1, EV_ABS = 3;
     private const int SYN_REPORT = 0;
-    private const int ABS_X = 0, ABS_Y = 1, ABS_RX = 3, ABS_RY = 4, ABS_Z = 2, ABS_RZ = 5, ABS_HAT0X = 16, ABS_HAT0Y = 17;
-    private const int BTN_SOUTH = 0x130, BTN_EAST = 0x131, BTN_NORTH = 0x133, BTN_WEST = 0x134;
-    private const int BTN_TL = 0x136, BTN_TR = 0x137, BTN_SELECT = 0x13a, BTN_START = 0x13b, BTN_MODE = 0x13c, BTN_THUMBL = 0x13d, BTN_THUMBR = 0x13e;
+    // Linux input_event.code is __u16; model event codes with that exact width.
+    private const ushort ABS_X = 0, ABS_Y = 1, ABS_RX = 3, ABS_RY = 4, ABS_Z = 2, ABS_RZ = 5, ABS_HAT0X = 16, ABS_HAT0Y = 17;
+    private const ushort BTN_SOUTH = 0x130, BTN_EAST = 0x131, BTN_NORTH = 0x133, BTN_WEST = 0x134;
+    private const ushort BTN_TL = 0x136, BTN_TR = 0x137, BTN_SELECT = 0x13a, BTN_START = 0x13b, BTN_MODE = 0x13c, BTN_THUMBL = 0x13d, BTN_THUMBR = 0x13e;
     private int _fd = -1;
     public bool IsAvailable => _fd >= 0;
 
