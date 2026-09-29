@@ -13,12 +13,18 @@ public sealed class VirtualController : IDisposable
     private const ushort BTN_SOUTH = 0x130, BTN_EAST = 0x131, BTN_NORTH = 0x133, BTN_WEST = 0x134;
     private const ushort BTN_TL = 0x136, BTN_TR = 0x137, BTN_SELECT = 0x13a, BTN_START = 0x13b, BTN_MODE = 0x13c, BTN_THUMBL = 0x13d, BTN_THUMBR = 0x13e;
     private int _fd = -1;
-    public bool IsAvailable => _fd >= 0;
+    private bool _created;
+    public bool IsAvailable => _created;
 
     public void Initialize()
     {
-        _fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
-        if (_fd < 0) throw new IOException($"Cannot open /dev/uinput: {Marshal.GetLastPInvokeError()}. See README-LINUX.md.");
+        if (_fd >= 0) throw new InvalidOperationException("The virtual controller is already initialized.");
+        _fd = open("/dev/uinput", O_WRONLY);
+        if (_fd < 0)
+        {
+            var errno = Marshal.GetLastPInvokeError();
+            throw new IOException($"Cannot open /dev/uinput (errno {errno}). Ensure the uinput module is loaded and the current user has write permission; see README-LINUX.md.");
+        }
         try
         {
             SetBit(IOC(1, 'U', 100, 4), EV_SYN); SetBit(IOC(1, 'U', 100, 4), EV_KEY); SetBit(IOC(1, 'U', 100, 4), EV_ABS);
@@ -30,9 +36,10 @@ public sealed class VirtualController : IDisposable
             foreach (var axis in new[] { ABS_Z, ABS_RZ }) SetAbs(axis, 0, 255);
             foreach (var axis in new[] { ABS_HAT0X, ABS_HAT0Y }) SetAbs(axis, -1, 1);
             if (ioctl(_fd, IOC(0, 'U', 1, 0), 0) < 0) Fail("UI_DEV_CREATE");
+            _created = true;
             Console.WriteLine("[UINPUT] Virtual gamepad created");
         }
-        catch { close(_fd); _fd = -1; throw; }
+        catch { close(_fd); _fd = -1; _created = false; throw; }
     }
 
     public void Update(InputParser.ControllerState s)
@@ -44,13 +51,34 @@ public sealed class VirtualController : IDisposable
     }
     public void Reset() { if (_fd >= 0) Update(default); }
     private static int Scale(float f) => (int)(Math.Clamp(f,-1,1)*32767);
-    private void Key(int c,bool v)=>Event(EV_KEY,c,v?1:0); private void Axis(int c,int v)=>Event(EV_ABS,c,v); private void Sync()=>Event(EV_SYN,SYN_REPORT,0);
+    private void Key(ushort code, bool pressed) => Event(EV_KEY, code, pressed ? 1 : 0);
+    private void Axis(ushort code, int value) => Event(EV_ABS, code, value);
+    private void Sync() => Event(EV_SYN, SYN_REPORT, 0);
     private void Event(ushort type,ushort code,int value) { var e = new InputEvent { Type=type, Code=code, Value=value }; if(write(_fd,ref e,(nuint)Marshal.SizeOf<InputEvent>())<0) Fail("writing input event"); }
-    private void SetBit(uint request,int bit) { if(ioctl(_fd,request,bit)<0) Fail("setting uinput capability"); }
-    private void SetAbs(int axis,int min,int max) { var a=new UInputAbsSetup { Code=(ushort)axis, AbsInfo=new AbsInfo { Minimum=min,Maximum=max } }; if(ioctl(_fd,IOC(1,'U',4,Marshal.SizeOf<UInputAbsSetup>()),ref a)<0) Fail("UI_ABS_SETUP"); }
+    private void SetBit(nuint request, int bit)
+    {
+        if (ioctl(_fd, request, (nuint)bit) < 0) Fail("setting uinput capability");
+    }
+    private void SetAbs(ushort axis, int min, int max)
+    {
+        var setup = new UInputAbsSetup { Code = axis, AbsInfo = new AbsInfo { Minimum = min, Maximum = max } };
+        if (ioctl(_fd, IOC(1, 'U', 4, Marshal.SizeOf<UInputAbsSetup>()), ref setup) < 0) Fail("UI_ABS_SETUP");
+    }
     private static void Fail(string operation)=>throw new IOException($"uinput {operation} failed: {Marshal.GetLastPInvokeError()}");
-    private static uint IOC(int dir,char type,int nr,int size)=>(uint)((dir<<30)|(size<<16)|(type<<8)|nr);
-    public void Dispose() { if(_fd<0)return; Reset(); ioctl(_fd,IOC(0,'U',2,0),0); close(_fd); _fd=-1; }
+    private static nuint IOC(int dir, char type, int nr, int size) =>
+        (nuint)((dir << 30) | (size << 16) | (type << 8) | nr);
+    public void Dispose()
+    {
+        if (_fd < 0) return;
+        try { if (_created) Reset(); }
+        finally
+        {
+            if (_created) ioctl(_fd, IOC(0, 'U', 2, 0), 0);
+            close(_fd);
+            _fd = -1;
+            _created = false;
+        }
+    }
     [StructLayout(LayoutKind.Sequential)] private struct InputId { public ushort Bus,Vendor,Product,Version; }
     [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Ansi)] private struct UInputSetup { public InputId Id; [MarshalAs(UnmanagedType.ByValTStr,SizeConst=80)] public string Name; public uint FfEffectsMax; }
     [StructLayout(LayoutKind.Sequential)] private struct AbsInfo { public int Value,Minimum,Maximum,Fuzz,Flat,Resolution; }
@@ -59,7 +87,7 @@ public sealed class VirtualController : IDisposable
     [DllImport("libc",SetLastError=true,CharSet=CharSet.Ansi)] private static extern int open(string path,int flags);
     [DllImport("libc",SetLastError=true)] private static extern int close(int fd);
     [DllImport("libc",SetLastError=true)] private static extern long write(int fd,ref InputEvent data,nuint count);
-    [DllImport("libc",SetLastError=true,EntryPoint="ioctl")] private static extern int ioctl(int fd,uint request,int value);
-    [DllImport("libc",SetLastError=true,EntryPoint="ioctl")] private static extern int ioctl(int fd,uint request,ref UInputSetup setup);
-    [DllImport("libc",SetLastError=true,EntryPoint="ioctl")] private static extern int ioctl(int fd,uint request,ref UInputAbsSetup setup);
+    [DllImport("libc", SetLastError = true, EntryPoint = "ioctl")] private static extern int ioctl(int fd, nuint request, nuint value);
+    [DllImport("libc", SetLastError = true, EntryPoint = "ioctl")] private static extern int ioctl(int fd, nuint request, ref UInputSetup setup);
+    [DllImport("libc", SetLastError = true, EntryPoint = "ioctl")] private static extern int ioctl(int fd, nuint request, ref UInputAbsSetup setup);
 }

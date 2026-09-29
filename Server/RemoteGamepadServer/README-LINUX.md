@@ -6,9 +6,11 @@ The Linux server is a .NET 10 console process and writes an actual gamepad throu
 
 ## Install and configure
 
+Install .NET SDK 10 for Ubuntu 26.04 using the Ubuntu package source or the Microsoft .NET Ubuntu instructions for that release, then verify `dotnet --version` reports `10.x`. The install commands below are guidance and have not been verified in this checkout (the development environment has no .NET SDK).
+
 ```sh
 sudo apt update
-sudo apt install -y dotnet-sdk-10.0 linux-tools-common evtest
+sudo apt install -y dotnet-sdk-10.0 evtest
 sudo modprobe uinput
 sudo groupadd -f uinput
 sudo usermod -aG input,uinput "$USER"
