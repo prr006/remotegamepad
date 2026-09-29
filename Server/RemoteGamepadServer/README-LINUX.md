@@ -56,8 +56,22 @@ In a second terminal verify the device and events:
 
 ```sh
 grep -A8 -B2 RemoteGamepad /proc/bus/input/devices
-sudo evtest
+sudo evtest /dev/input/eventN   # replace eventN with the device node shown above
 ```
+
+Run the backend-only mapping exercise (it first validates a raw 20-field JSON packet through `InputParser`, then emits each digital press/release and stick/trigger extreme with an explicit `[SELF-TEST]` label):
+
+```sh
+dotnet run -c Release -- --uinput-self-test
+```
+
+For rate-limited state-to-code diagnostics while using transports:
+
+```sh
+dotnet run -c Release -- --trace-input
+```
+
+Both diagnostics require a working `/dev/uinput`; neither runs in the default mode.
 
 Send an example button/axis packet from another host (substitute the server's Wi-Fi IP):
 
@@ -66,6 +80,10 @@ printf '{"lx":0.6,"ly":-0.2,"a":true}' | nc -u -w1 SERVER_IP 26760
 ```
 
 Open UDP 26760 and 26761 in the host firewall on the trusted local network. `Ctrl+C` resets controls and destroys the uinput device. If startup reports permission denied, check `ls -l /dev/uinput`, `id`, the loaded module (`lsmod | grep uinput`), and log out/in after changing groups. Do not run the server as root as a routine workaround.
+
+## Controller mapping
+
+The implementation follows the [Linux kernel gamepad specification](https://docs.kernel.org/input/gamepad.html) geometry, not the historical symbolic aliases: Android `X` is the physical left face button and emits `BTN_WEST` (kernel alias `BTN_Y`); Android `Y` is the top face button and emits `BTN_NORTH` (kernel alias `BTN_X`). A/B map to `BTN_SOUTH`/`BTN_EAST`. LB/RB, Start/Select, and stick clicks map to `BTN_TL`, `BTN_TR`, `BTN_START`, `BTN_SELECT`, `BTN_THUMBL`, and `BTN_THUMBR`. Left/right sticks use `ABS_X/Y` and `ABS_RX/RY` with negative X left and negative Y up. LT/RT use common Xbox evdev analog axes `ABS_Z`/`ABS_RZ` with range 0–255. D-pad emits matching `BTN_DPAD_*` press/release events and `ABS_HAT0X/Y` values (-1..1); up/left are negative; simultaneous opposites resolve to neutral on that axis so the key and hat representations cannot disagree.
 
 ## Bluetooth Classic / SPP
 
