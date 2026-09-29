@@ -5,7 +5,7 @@ using System.Text;
 
 public sealed class UdpDiscoveryListener : IAsyncDisposable
 {
-    public const int Port = 26760;
+    public const int Port = 26761;
     private UdpClient? _udp;
     public async Task RunAsync(CancellationToken token)
     {
@@ -15,10 +15,11 @@ public sealed class UdpDiscoveryListener : IAsyncDisposable
         {
             UdpReceiveResult request;
             try { request = await _udp.ReceiveAsync(token); } catch (OperationCanceledException) { break; }
-            if (Encoding.UTF8.GetString(request.Buffer).Trim().Equals("DISCOVER", StringComparison.OrdinalIgnoreCase))
+            if (Encoding.UTF8.GetString(request.Buffer).Trim() == "REMOTE_GAMEPAD_DISCOVER")
             {
-                var response = Encoding.UTF8.GetBytes($"REMOTEGAMEPAD|{UdpInputServer.Port}");
+                var response = Encoding.UTF8.GetBytes($"REMOTE_GAMEPAD_SERVER|RemoteGamepad Linux|{UdpInputServer.Port}");
                 await _udp.SendAsync(response, request.RemoteEndPoint, token);
+                Console.WriteLine($"[UDP] Discovery response sent to {request.RemoteEndPoint}");
             }
         }
     }

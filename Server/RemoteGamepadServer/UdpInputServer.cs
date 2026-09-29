@@ -5,9 +5,10 @@ using System.Text;
 
 public sealed class UdpInputServer : IAsyncDisposable
 {
-    public const int Port = 26761;
+    public const int Port = 26760;
     private readonly VirtualController _controller;
     private UdpClient? _udp;
+    private long _lastActivityLog;
     public UdpInputServer(VirtualController controller) => _controller = controller;
     public async Task RunAsync(CancellationToken token)
     {
@@ -19,7 +20,14 @@ public sealed class UdpInputServer : IAsyncDisposable
             try { packet = await _udp.ReceiveAsync(token); } catch (OperationCanceledException) { break; }
             var message = Encoding.UTF8.GetString(packet.Buffer);
             var state = InputParser.Parse(message);
-            if (state is { } value) _controller.Update(value);
+            if (state is { } value)
+            {
+                _controller.Update(value);
+                var now = Environment.TickCount64;
+                if (now - Interlocked.Read(ref _lastActivityLog) >= 5000 &&
+                    Interlocked.Exchange(ref _lastActivityLog, now) <= now - 5000)
+                    Console.WriteLine($"[UDP] Input received from {packet.RemoteEndPoint}");
+            }
         }
     }
     public ValueTask DisposeAsync() { _udp?.Dispose(); return ValueTask.CompletedTask; }

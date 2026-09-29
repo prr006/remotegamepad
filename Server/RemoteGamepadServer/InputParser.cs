@@ -53,10 +53,11 @@ public static class InputParser
     /// </summary>
     public static ControllerState? Parse(string message)
     {
-        if (!message.StartsWith(Protocol.MSG_INPUT + "|", StringComparison.Ordinal))
-            return null;
-
-        var json = message[(Protocol.MSG_INPUT.Length + 1)..];
+        var trimmed = message.Trim();
+        var json = trimmed.StartsWith(Protocol.MSG_INPUT + "|", StringComparison.Ordinal)
+            ? trimmed[(Protocol.MSG_INPUT.Length + 1)..]
+            : trimmed.StartsWith('{') ? trimmed : null;
+        if (json is null) return null;
         try
         {
             var dto = JsonSerializer.Deserialize<GamepadInputDto>(json);

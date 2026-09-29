@@ -24,7 +24,9 @@ public class BluetoothServer : IDisposable
     private BluetoothListener? _listener;
     private BluetoothClient? _client;
     private NetworkStream? _stream;
-    private CancellationTokenSource? _cts;
+    private CancellationTokenSource? _serverCts;
+    private CancellationTokenSource? _clientCts;
+    private Task? _acceptTask;
     private Task? _readTask;
 
     public bool IsConnected => _client?.Connected ?? false;
@@ -47,21 +49,32 @@ public class BluetoothServer : IDisposable
         if (_listener != null)
             throw new InvalidOperationException("Server already started");
 
+        var radio = BluetoothRadio.PrimaryRadio;
+        if (radio == null)
+            throw new InvalidOperationException("No Bluetooth adapter found. Check the adapter and `systemctl status bluetooth`.");
+
+        radio.Mode = RadioMode.Discoverable;
+        Console.WriteLine($"[BT] Bluetooth adapter: {radio.Name} ({radio.LocalAddress})");
         _listener = new BluetoothListener(Protocol.SppUuid)
         {
             ServiceName = Protocol.ServiceName
         };
-        _listener.Start();
+        try { _listener.Start(); }
+        catch (Exception ex)
+        {
+            try { _listener.Stop(); } catch { }
+            _listener = null;
+            throw new InvalidOperationException("BlueZ could not register/listen for the RFCOMM SPP service. Check bluetoothd, adapter power, and permissions.", ex);
+        }
 
-        Console.WriteLine($"[SERVER] Listening on {BluetoothRadio.Default.LocalAddress}");
-        Console.WriteLine($"[SERVER] Service UUID: {Protocol.SppUuid}");
-        Console.WriteLine($"[SERVER] Service Name: {Protocol.ServiceName}");
-        Console.WriteLine("[SERVER] Waiting for Android connection...");
+        Console.WriteLine($"[BT] RFCOMM service registered: {Protocol.ServiceName} ({Protocol.SppUuid})");
+        Console.WriteLine("[BT] Waiting for Android connection...");
 
-        _cts = new CancellationTokenSource();
+        var serverCts = new CancellationTokenSource();
+        _serverCts = serverCts;
 
-        // Accept loop on a background thread
-        Task.Run(() => AcceptLoop(_cts.Token));
+        // AcceptBluetoothClient is blocking; Stop closes the listener to release it.
+        _acceptTask = Task.Run(() => AcceptLoop(serverCts.Token));
     }
 
     private void AcceptLoop(CancellationToken ct)
@@ -78,6 +91,7 @@ public class BluetoothServer : IDisposable
                 }
 
                 HandleClient(client);
+                _readTask?.Wait(); // Keep one RFCOMM client active at a time.
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
@@ -94,7 +108,7 @@ public class BluetoothServer : IDisposable
         if (_client != null)
         {
             Console.WriteLine("[SERVER] New connection — closing previous client");
-            CleanupClient();
+            DisconnectClient();
         }
 
         _client = client;
@@ -103,8 +117,9 @@ public class BluetoothServer : IDisposable
         Console.WriteLine($"[SERVER] Client connected: {client.RemoteMachineName}");
         Connected?.Invoke(this, EventArgs.Empty);
 
-        _cts = new CancellationTokenSource();
-        _readTask = Task.Run(() => ReadLoop(_cts.Token));
+        var clientCts = new CancellationTokenSource();
+        _clientCts = clientCts;
+        _readTask = Task.Run(() => ReadLoop(clientCts.Token));
     }
 
     private void ReadLoop(CancellationToken ct)
@@ -151,8 +166,8 @@ public class BluetoothServer : IDisposable
                         Console.WriteLine("[SEND] PONG");
                         break;
                     case Protocol.MSG_DISCONNECT:
-                        Console.WriteLine("[SERVER] Received DISCONNECT — closing connection");
-                        break;
+                        Console.WriteLine("[BT] Received DISCONNECT — closing connection");
+                        return;
                     default:
                         // Handle INPUT messages
                         if (msg.StartsWith(Protocol.MSG_INPUT, StringComparison.Ordinal))
@@ -181,12 +196,9 @@ public class BluetoothServer : IDisposable
         }
         finally
         {
-            if (_client != null && _client.Connected)
-            {
-                CleanupClient();
-                Disconnected?.Invoke(this, EventArgs.Empty);
-                Console.WriteLine("[SERVER] Client disconnected. Waiting for new connection...");
-            }
+            CleanupClient();
+            Disconnected?.Invoke(this, EventArgs.Empty);
+            Console.WriteLine("[BT] Client disconnected; waiting for a new connection");
         }
     }
 
@@ -214,9 +226,12 @@ public class BluetoothServer : IDisposable
     /// </summary>
     public void DisconnectClient()
     {
-        _cts?.Cancel();
-        _readTask?.Wait(TimeSpan.FromSeconds(2));
-        CleanupClient();
+        _clientCts?.Cancel();
+        CleanupClient(); // Closing the stream unblocks the synchronous framed read.
+        try { _readTask?.Wait(TimeSpan.FromSeconds(2)); } catch (AggregateException) { }
+        _clientCts?.Dispose();
+        _clientCts = null;
+        _readTask = null;
     }
 
     /// <summary>
@@ -224,12 +239,15 @@ public class BluetoothServer : IDisposable
     /// </summary>
     public void Stop()
     {
-        _cts?.Cancel();
-        _readTask?.Wait(TimeSpan.FromSeconds(2));
-        CleanupClient();
-        _listener?.Stop();
+        _serverCts?.Cancel();
+        DisconnectClient();
+        try { _listener?.Stop(); } catch { }
         _listener = null;
-        Console.WriteLine("[SERVER] Stopped");
+        try { _acceptTask?.Wait(TimeSpan.FromSeconds(2)); } catch (AggregateException) { }
+        _acceptTask = null;
+        _serverCts?.Dispose();
+        _serverCts = null;
+        Console.WriteLine("[BT] RFCOMM listener stopped");
     }
 
     private void CleanupClient()
@@ -240,9 +258,5 @@ public class BluetoothServer : IDisposable
         _client = null;
     }
 
-    public void Dispose()
-    {
-        Stop();
-        _cts?.Dispose();
-    }
+    public void Dispose() => Stop();
 }

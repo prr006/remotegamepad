@@ -12,6 +12,12 @@ class Program
             controller.Initialize();
             await using var discovery = new UdpDiscoveryListener();
             await using var input = new UdpInputServer(controller);
+            using var bluetooth = new BluetoothServer();
+            bluetooth.InputReceived += (_, state) => controller.Update(state);
+            bluetooth.Disconnected += (_, _) => controller.Reset();
+            bluetooth.Error += (_, message) => Console.Error.WriteLine($"[BT] {message}");
+            try { bluetooth.Start(); }
+            catch (Exception ex) { Console.Error.WriteLine($"[BT] Bluetooth unavailable; UDP remains active: {ex.Message}"); }
             Console.WriteLine("RemoteGamepad Linux server (Ctrl+C to stop)");
             var tasks = new[] { discovery.RunAsync(cancellation.Token), input.RunAsync(cancellation.Token) };
             foreach (var task in tasks)

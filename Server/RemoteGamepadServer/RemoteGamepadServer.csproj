@@ -6,6 +6,6 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="BluetoothServer.cs" />
+    <PackageReference Include="InTheHand.Net.Bluetooth" Version="4.2.5" />
   </ItemGroup>
 </Project>
