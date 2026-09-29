@@ -1,261 +1,332 @@
 namespace RemoteGamepadServer;
 
-using InTheHand.Net;
 using InTheHand.Net.Bluetooth;
-using InTheHand.Net.Sockets;
-using System;
-using System.IO;
+using System.Diagnostics;
 using System.Net.Sockets;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 
-/// <summary>
-/// Isolated Bluetooth Classic transport layer for the Windows server.
-///
-/// Responsibilities:
-/// - Advertise an RFCOMM service (SPP)
-/// - Accept incoming Bluetooth connections from Android
-/// - Send/receive framed messages using <see cref="Protocol"/>
-/// - Notify callers via events
-/// - Clean up resources on disconnect
-/// </summary>
-public class BluetoothServer : IDisposable
+/// <summary>BlueZ RFCOMM/SPP server with native RFCOMM sockets and BlueZ SDP tooling.</summary>
+public sealed class BluetoothServer : IDisposable
 {
-    private BluetoothListener? _listener;
-    private BluetoothClient? _client;
-    private NetworkStream? _stream;
+    private const int AfBluetooth = 31, SockStream = 1, BtpProtocolRfcomm = 3;
+    private const int SockCloexec = 0x80000, PollIn = 1;
+    private const int ShutReadWrite = 2, MsgNoSignal = 0x4000;
+    private const byte RfcommChannel = 1;
+    private readonly object _sendLock = new();
+    private int _listenerFd = -1, _clientFd = -1;
+    private RfcommStream? _stream;
     private CancellationTokenSource? _serverCts;
-    private CancellationTokenSource? _clientCts;
     private Task? _acceptTask;
-    private Task? _readTask;
+    private string? _sdpRecordHandle;
 
-    public bool IsConnected => _client?.Connected ?? false;
-
+    public bool IsConnected => Volatile.Read(ref _clientFd) >= 0;
     public event EventHandler<string>? MessageReceived;
     public event EventHandler? Connected;
     public event EventHandler? Disconnected;
     public event EventHandler<string>? Error;
-
-    /// <summary>
-    /// Fired when an INPUT message is received and successfully parsed.
-    /// </summary>
     public event EventHandler<InputParser.ControllerState>? InputReceived;
 
-    /// <summary>
-    /// Start listening for incoming Bluetooth connections.
-    /// </summary>
     public void Start()
     {
-        if (_listener != null)
-            throw new InvalidOperationException("Server already started");
-
-        var radio = BluetoothRadio.PrimaryRadio;
-        if (radio == null)
-            throw new InvalidOperationException("No Bluetooth adapter found. Check the adapter and `systemctl status bluetooth`.");
-
+        if (_listenerFd >= 0) throw new InvalidOperationException("Bluetooth server is already started.");
+        var radio = BluetoothRadio.Default;
         radio.Mode = RadioMode.Discoverable;
         Console.WriteLine($"[BT] Bluetooth adapter: {radio.Name} ({radio.LocalAddress})");
-        _listener = new BluetoothListener(Protocol.SppUuid)
+
+        var fd = bluetoothSocket(AfBluetooth, SockStream | SockCloexec, BtpProtocolRfcomm);
+        if (fd < 0) ThrowNative("creating RFCOMM socket");
+        try
         {
-            ServiceName = Protocol.ServiceName
-        };
-        try { _listener.Start(); }
-        catch (Exception ex)
-        {
-            try { _listener.Stop(); } catch { }
-            _listener = null;
-            throw new InvalidOperationException("BlueZ could not register/listen for the RFCOMM SPP service. Check bluetoothd, adapter power, and permissions.", ex);
+            // sockaddr_rc: native-endian family, BDADDR_ANY (six zeros), RFCOMM channel, pad.
+            var address = new byte[] { AfBluetooth, 0, 0, 0, 0, 0, 0, 0, RfcommChannel, 0 };
+            if (bind(fd, address, (uint)address.Length) < 0) ThrowNative("binding RFCOMM channel 1");
+            if (listen(fd, 1) < 0) ThrowNative("listening on RFCOMM channel 1");
+            _listenerFd = fd;
+            RegisterSdpRecord();
+
+            Console.WriteLine($"[BT] RFCOMM listener active on channel {RfcommChannel}; SPP UUID {Protocol.SppUuid}");
+            Console.WriteLine("[BT] Waiting for Android RFCOMM connection...");
+            _serverCts = new CancellationTokenSource();
+            var token = _serverCts.Token;
+            _acceptTask = Task.Run(() => AcceptLoop(fd, token));
         }
-
-        Console.WriteLine($"[BT] RFCOMM service registered: {Protocol.ServiceName} ({Protocol.SppUuid})");
-        Console.WriteLine("[BT] Waiting for Android connection...");
-
-        var serverCts = new CancellationTokenSource();
-        _serverCts = serverCts;
-
-        // AcceptBluetoothClient is blocking; Stop closes the listener to release it.
-        _acceptTask = Task.Run(() => AcceptLoop(serverCts.Token));
+        catch
+        {
+            _serverCts?.Cancel();
+            _serverCts?.Dispose();
+            _serverCts = null;
+            _listenerFd = -1;
+            close(fd);
+            UnregisterSdpRecord();
+            throw;
+        }
     }
 
-    private void AcceptLoop(CancellationToken ct)
+    private void RegisterSdpRecord()
     {
-        while (!ct.IsCancellationRequested)
+        var before = ReadSdpHandles();
+        RunBluezTool("sdptool", "add", "--channel=1", "SP");
+        var added = ReadSdpHandles().Except(before, StringComparer.OrdinalIgnoreCase).ToArray();
+        if (added.Length == 0)
+            throw new InvalidOperationException("sdptool did not expose a new SPP SDP record handle.");
+        _sdpRecordHandle = added[0];
+        Console.WriteLine($"[BT] SPP SDP record registered (handle {_sdpRecordHandle})");
+    }
+
+    private static HashSet<string> ReadSdpHandles()
+    {
+        var output = RunBluezTool("sdptool", "browse", "local");
+        return Regex.Matches(output, @"Service RecHandle:\s*(0x[0-9a-fA-F]+)")
+            .Select(match => match.Groups[1].Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string RunBluezTool(string tool, params string[] args)
+    {
+        var start = new ProcessStartInfo(tool)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        foreach (var arg in args) start.ArgumentList.Add(arg);
+        using var process = Process.Start(start) ?? throw new IOException($"Could not start {tool}; install the Ubuntu bluez package.");
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(8000))
+        {
+            process.Kill(entireProcessTree: true);
+            process.WaitForExit();
+            throw new TimeoutException($"{tool} {string.Join(' ', args)} timed out.");
+        }
+        var stdout = stdoutTask.GetAwaiter().GetResult();
+        var stderr = stderrTask.GetAwaiter().GetResult();
+        if (process.ExitCode != 0)
+            throw new IOException($"{tool} {string.Join(' ', args)} failed ({process.ExitCode}): {stderr.Trim()} {stdout.Trim()}");
+        return stdout;
+    }
+
+    private void UnregisterSdpRecord()
+    {
+        var handle = _sdpRecordHandle;
+        _sdpRecordHandle = null;
+        if (handle is null) return;
+        try { RunBluezTool("sdptool", "del", handle); }
+        catch (Exception ex) { Console.Error.WriteLine($"[BT] Could not remove SDP record {handle}: {ex.Message}"); }
+    }
+
+    private void AcceptLoop(int listenerFd, CancellationToken token)
+    {
+        var pollFd = new PollFd { Fd = listenerFd, Events = PollIn };
+        while (!token.IsCancellationRequested)
         {
             try
             {
-                var client = _listener!.AcceptBluetoothClient();
-                if (ct.IsCancellationRequested)
+                var ready = poll(ref pollFd, 1, 300);
+                if (ready == 0) continue;
+                if (ready < 0)
                 {
-                    client.Close();
-                    return;
+                    var errno = Marshal.GetLastPInvokeError();
+                    if (errno == 4) continue; // EINTR
+                    throw new SocketException(errno);
                 }
-
-                HandleClient(client);
-                _readTask?.Wait(); // Keep one RFCOMM client active at a time.
+                var clientFd = accept4(listenerFd, IntPtr.Zero, IntPtr.Zero, SockCloexec);
+                if (clientFd < 0)
+                {
+                    if (token.IsCancellationRequested) break;
+                    throw new SocketException(Marshal.GetLastPInvokeError());
+                }
+                if (token.IsCancellationRequested) { close(clientFd); break; }
+                HandleClient(clientFd, token);
             }
-            catch (Exception ex) when (!ct.IsCancellationRequested)
+            catch (Exception ex)
             {
-                Error?.Invoke(this, $"Accept error: {ex.Message}");
-                Console.WriteLine($"[ERROR] Accept error: {ex.Message}");
-                Thread.Sleep(1000);
+                if (!token.IsCancellationRequested)
+                {
+                    Console.Error.WriteLine($"[BT] Accept/session error: {ex.Message}; retrying");
+                    Error?.Invoke(this, $"Accept/session error: {ex.Message}");
+                    try { Task.Delay(250, token).GetAwaiter().GetResult(); }
+                    catch (OperationCanceledException) { }
+                }
             }
         }
     }
 
-    private void HandleClient(BluetoothClient client)
+    private void HandleClient(int clientFd, CancellationToken token)
     {
-        // Close previous client if any (single-client policy)
-        if (_client != null)
-        {
-            Console.WriteLine("[SERVER] New connection — closing previous client");
-            DisconnectClient();
-        }
-
-        _client = client;
-        _stream = client.GetStream();
-
-        Console.WriteLine($"[SERVER] Client connected: {client.RemoteMachineName}");
-        Connected?.Invoke(this, EventArgs.Empty);
-
-        var clientCts = new CancellationTokenSource();
-        _clientCts = clientCts;
-        _readTask = Task.Run(() => ReadLoop(clientCts.Token));
-    }
-
-    private void ReadLoop(CancellationToken ct)
-    {
-        var stream = _stream;
-        if (stream == null) return;
-
+        _clientFd = clientFd;
+        var stream = new RfcommStream(clientFd);
+        _stream = stream;
         try
         {
-            while (!ct.IsCancellationRequested && _client?.Connected == true)
-            {
-                var msg = Protocol.ReadMessage(stream, ct);
-                if (msg == null)
-                {
-                    Console.WriteLine("[SERVER] Client closed stream cleanly");
-                    break;
-                }
-
-                // Only log non-INPUT messages to avoid console spam
-                if (!msg.StartsWith(Protocol.MSG_INPUT, StringComparison.Ordinal))
-                {
-                    Console.WriteLine($"[RECV] {msg}");
-                }
-                else
-                {
-                    // Throttled logging for input
-                    if (Environment.TickCount % 5000 < 50)
-                    {
-                        Console.WriteLine("[RECV] INPUT (throttled)");
-                    }
-                }
-
-                MessageReceived?.Invoke(this, msg);
-
-                // Auto-respond to protocol messages + parse INPUT
-                switch (msg)
-                {
-                    case Protocol.MSG_HELLO:
-                        Send(Protocol.MSG_HELLO_ACK);
-                        Console.WriteLine("[SEND] HELLO_ACK");
-                        break;
-                    case Protocol.MSG_PING:
-                        Send(Protocol.MSG_PONG);
-                        Console.WriteLine("[SEND] PONG");
-                        break;
-                    case Protocol.MSG_DISCONNECT:
-                        Console.WriteLine("[BT] Received DISCONNECT — closing connection");
-                        return;
-                    default:
-                        // Handle INPUT messages
-                        if (msg.StartsWith(Protocol.MSG_INPUT, StringComparison.Ordinal))
-                        {
-                            var state = InputParser.Parse(msg);
-                            if (state.HasValue)
-                            {
-                                InputReceived?.Invoke(this, state.Value);
-                            }
-                        }
-                        break;
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            Console.WriteLine("[SERVER] Read loop cancelled");
-        }
-        catch (IOException ex)
-        {
-            if (!ct.IsCancellationRequested)
-            {
-                Console.WriteLine($"[ERROR] Read error: {ex.Message}");
-                Error?.Invoke(this, $"Read error: {ex.Message}");
-            }
+            Console.WriteLine("[BT] Android RFCOMM client connected");
+            Connected?.Invoke(this, EventArgs.Empty);
+            ReadLoop(stream, token);
         }
         finally
         {
-            CleanupClient();
-            Disconnected?.Invoke(this, EventArgs.Empty);
-            Console.WriteLine("[BT] Client disconnected; waiting for a new connection");
+            if (Interlocked.CompareExchange(ref _clientFd, -1, clientFd) == clientFd)
+            {
+                _stream = null;
+                stream.Dispose();
+                Disconnected?.Invoke(this, EventArgs.Empty);
+                Console.WriteLine("[BT] Client disconnected; waiting for a new connection");
+            }
+            else stream.Dispose();
         }
     }
 
-    /// <summary>
-    /// Send a framed message to the connected client.
-    /// </summary>
+    private void ReadLoop(RfcommStream stream, CancellationToken token)
+    {
+        while (!token.IsCancellationRequested && IsConnected)
+        {
+            var message = Protocol.ReadMessage(stream, token);
+            if (message is null) return;
+            if (!message.StartsWith(Protocol.MSG_INPUT, StringComparison.Ordinal))
+                Console.WriteLine($"[BT] Received {message}");
+            MessageReceived?.Invoke(this, message);
+            switch (message)
+            {
+                case Protocol.MSG_HELLO: Send(Protocol.MSG_HELLO_ACK); break;
+                case Protocol.MSG_PING: Send(Protocol.MSG_PONG); break;
+                case Protocol.MSG_DISCONNECT: return;
+                default:
+                    if (!message.StartsWith(Protocol.MSG_INPUT + "|", StringComparison.Ordinal)) continue;
+                    var state = InputParser.Parse(message);
+                    if (state is { } parsed) InputReceived?.Invoke(this, parsed);
+                    break;
+            }
+        }
+    }
+
     public bool Send(string message)
     {
-        try
+        lock (_sendLock)
         {
-            var stream = _stream;
-            if (stream == null || !IsConnected) return false;
-            Protocol.WriteMessage(stream, message);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Error?.Invoke(this, $"Send error: {ex.Message}");
-            return false;
+            try
+            {
+                var stream = _stream;
+                if (stream is null || !IsConnected) return false;
+                Protocol.WriteMessage(stream, message);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Error?.Invoke(this, $"Send error: {ex.Message}");
+                return false;
+            }
         }
     }
 
-    /// <summary>
-    /// Gracefully disconnect the current client.
-    /// </summary>
     public void DisconnectClient()
     {
-        _clientCts?.Cancel();
-        CleanupClient(); // Closing the stream unblocks the synchronous framed read.
-        try { _readTask?.Wait(TimeSpan.FromSeconds(2)); } catch (AggregateException) { }
-        _clientCts?.Dispose();
-        _clientCts = null;
-        _readTask = null;
+        var fd = Interlocked.Exchange(ref _clientFd, -1);
+        if (fd < 0) return;
+        var stream = Interlocked.Exchange(ref _stream, null);
+        shutdown(fd, ShutReadWrite);
+        stream?.Dispose();
+        Disconnected?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>
-    /// Stop the server entirely.
-    /// </summary>
     public void Stop()
     {
         _serverCts?.Cancel();
         DisconnectClient();
-        try { _listener?.Stop(); } catch { }
-        _listener = null;
-        try { _acceptTask?.Wait(TimeSpan.FromSeconds(2)); } catch (AggregateException) { }
+        try { _acceptTask?.Wait(TimeSpan.FromSeconds(3)); }
+        catch (AggregateException ex) { Console.Error.WriteLine($"[BT] Listener shutdown error: {ex.GetBaseException().Message}"); }
         _acceptTask = null;
+        var listenerFd = Interlocked.Exchange(ref _listenerFd, -1);
+        if (listenerFd >= 0) close(listenerFd);
         _serverCts?.Dispose();
         _serverCts = null;
+        UnregisterSdpRecord();
         Console.WriteLine("[BT] RFCOMM listener stopped");
     }
 
-    private void CleanupClient()
+    private static void ThrowNative(string operation)
     {
-        try { _stream?.Close(); } catch { }
-        try { _client?.Close(); } catch { }
-        _stream = null;
-        _client = null;
+        var socketException = new SocketException(Marshal.GetLastPInvokeError());
+        throw new IOException($"Bluetooth {operation} failed: {socketException.Message}", socketException);
+    }
+
+    [StructLayout(LayoutKind.Sequential)] private struct PollFd { public int Fd; public short Events; public short Revents; }
+    [DllImport("libc", SetLastError = true, EntryPoint = "socket")] private static extern int bluetoothSocket(int domain, int type, int protocol);
+    [DllImport("libc", SetLastError = true)] private static extern int bind(int fd, byte[] address, uint addressLength);
+    [DllImport("libc", SetLastError = true)] private static extern int listen(int fd, int backlog);
+    [DllImport("libc", SetLastError = true)] private static extern int accept4(int fd, IntPtr address, IntPtr addressLength, int flags);
+    [DllImport("libc", SetLastError = true)] private static extern int poll(ref PollFd fds, nuint count, int timeoutMilliseconds);
+    [DllImport("libc", SetLastError = true)] private static extern int shutdown(int fd, int how);
+    [DllImport("libc", SetLastError = true)] private static extern int close(int fd);
+    [DllImport("libc", SetLastError = true)] private static extern long recv(int fd, IntPtr buffer, nuint length, int flags);
+    [DllImport("libc", SetLastError = true)] private static extern long send(int fd, IntPtr buffer, nuint length, int flags);
+
+    private sealed class RfcommStream(int fd) : Stream
+    {
+        private int _fd = fd;
+        public override bool CanRead => _fd >= 0;
+        public override bool CanSeek => false;
+        public override bool CanWrite => _fd >= 0;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            ArgumentNullException.ThrowIfNull(buffer);
+            if ((uint)offset > buffer.Length || (uint)count > buffer.Length - offset) throw new ArgumentOutOfRangeException();
+            var handle = Volatile.Read(ref _fd);
+            if (handle < 0) throw new ObjectDisposedException(nameof(RfcommStream));
+            var pin = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            try
+            {
+                while (true)
+                {
+                    var received = recv(handle, IntPtr.Add(pin.AddrOfPinnedObject(), offset), (nuint)count, 0);
+                    if (received >= 0) return checked((int)received);
+                    var errno = Marshal.GetLastPInvokeError();
+                    if (errno == 4) continue; // EINTR
+                    throw new SocketException(errno);
+                }
+            }
+            finally { pin.Free(); }
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            ArgumentNullException.ThrowIfNull(buffer);
+            if ((uint)offset > buffer.Length || (uint)count > buffer.Length - offset) throw new ArgumentOutOfRangeException();
+            var fd = Volatile.Read(ref _fd);
+            if (fd < 0) throw new ObjectDisposedException(nameof(RfcommStream));
+            var pin = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            try
+            {
+                var written = 0;
+                while (written < count)
+                {
+                    var pointer = IntPtr.Add(pin.AddrOfPinnedObject(), offset + written);
+                    var result = send(fd, pointer, (nuint)(count - written), MsgNoSignal);
+                    if (result < 0)
+                    {
+                        var errno = Marshal.GetLastPInvokeError();
+                        if (errno == 4) continue; // EINTR
+                        throw new SocketException(errno);
+                    }
+                    if (result == 0) throw new IOException("RFCOMM socket closed during write.");
+                    written += checked((int)result);
+                }
+            }
+            finally { pin.Free(); }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            var fd = Interlocked.Exchange(ref _fd, -1);
+            if (fd >= 0) { shutdown(fd, ShutReadWrite); close(fd); }
+            base.Dispose(disposing);
+        }
     }
 
     public void Dispose() => Stop();

@@ -12,10 +12,11 @@ using System.Threading.Tasks;
 ///
 /// Framing: [4-byte length, big-endian][UTF-8 payload]
 ///
-/// Both Android and Windows must use exactly the same framing.
+/// Android Bluetooth and the Linux RFCOMM server use exactly this framing.
 /// </summary>
 public static class Protocol
 {
+    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     public const string MSG_HELLO      = "HELLO";
     public const string MSG_HELLO_ACK  = "HELLO_ACK";
     public const string MSG_PING       = "PING";
@@ -59,7 +60,8 @@ public static class Protocol
         var payload = ReadFully(stream, length, ct);
         if (payload == null) throw new IOException("Unexpected EOF after header");
 
-        return Encoding.UTF8.GetString(payload);
+        try { return StrictUtf8.GetString(payload); }
+        catch (DecoderFallbackException ex) { throw new IOException("Payload is not valid UTF-8.", ex); }
     }
 
     private static byte[]? ReadFully(Stream stream, int count, CancellationToken ct)
