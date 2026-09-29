@@ -1,32 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <UseWindowsForms>false</UseWindowsForms>
-    <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>false</SelfContained>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
-
-  <!--
-    32feet.NET is the de-facto standard Bluetooth library for .NET on Windows.
-    It wraps the native Microsoft Bluetooth APIs and provides a clean Sockets-like
-    interface over RFCOMM (SPP).  Version 4.0.36 is the latest stable release.
-  -->
   <ItemGroup>
-    <PackageReference Include="InTheHand.Net.Bluetooth" Version="4.0.36" />
+    <Compile Remove="BluetoothServer.cs" />
   </ItemGroup>
-
-  <!--
-    Nefarius.ViGEm.Client provides virtual Xbox 360 / DS4 controller output.
-    Requires the ViGEmBus driver to be installed on the Windows machine.
-    Version 1.21.256 is the latest stable release.
-  -->
-  <ItemGroup>
-    <PackageReference Include="Nefarius.ViGEm.Client" Version="1.21.256" />
-  </ItemGroup>
-
 </Project>

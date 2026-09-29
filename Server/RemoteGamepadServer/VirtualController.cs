@@ -1,136 +1,64 @@
 namespace RemoteGamepadServer;
 
-using Nefarius.ViGEm.Client;
-using Nefarius.ViGEm.Client.Targets;
-using Nefarius.ViGEm.Client.Targets.Xbox360;
+using System.Runtime.InteropServices;
 
-/// <summary>
-/// Virtual Xbox 360 controller output layer using ViGEm.
-///
-/// Maps parsed Android controller input to a virtual Xbox 360 gamepad
-/// visible to Windows games and applications.
-/// </summary>
-public class VirtualController : IDisposable
+/// <summary>Linux uinput-backed virtual gamepad. Requires writable /dev/uinput.</summary>
+public sealed class VirtualController : IDisposable
 {
-    private ViGEmClient? _client;
-    private IXbox360Controller? _controller;
-    private bool _available;
+    private const int O_WRONLY = 1, O_NONBLOCK = 0x800;
+    private const int EV_SYN = 0, EV_KEY = 1, EV_ABS = 3;
+    private const int SYN_REPORT = 0;
+    private const int ABS_X = 0, ABS_Y = 1, ABS_RX = 3, ABS_RY = 4, ABS_Z = 2, ABS_RZ = 5, ABS_HAT0X = 16, ABS_HAT0Y = 17;
+    private const int BTN_SOUTH = 0x130, BTN_EAST = 0x131, BTN_NORTH = 0x133, BTN_WEST = 0x134;
+    private const int BTN_TL = 0x136, BTN_TR = 0x137, BTN_SELECT = 0x13a, BTN_START = 0x13b, BTN_MODE = 0x13c, BTN_THUMBL = 0x13d, BTN_THUMBR = 0x13e;
+    private int _fd = -1;
+    public bool IsAvailable => _fd >= 0;
 
-    public bool IsAvailable => _available;
-
-    /// <summary>
-    /// Attempt to create and connect the virtual controller.
-    /// If ViGEm is not installed, logs a warning and continues in passthrough mode.
-    /// </summary>
     public void Initialize()
     {
+        _fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
+        if (_fd < 0) throw new IOException($"Cannot open /dev/uinput: {Marshal.GetLastPInvokeError()}. See README-LINUX.md.");
         try
         {
-            _client = new ViGEmClient();
-            _controller = _client.CreateXbox360Controller();
-            _controller.Connect();
-            _available = true;
-            Console.WriteLine("[VIGEM] Virtual Xbox 360 controller connected");
+            SetBit(IOC(1, 'U', 100, 4), EV_SYN); SetBit(IOC(1, 'U', 100, 4), EV_KEY); SetBit(IOC(1, 'U', 100, 4), EV_ABS);
+            foreach (var key in new[] { BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST, BTN_TL, BTN_TR, BTN_SELECT, BTN_START, BTN_MODE, BTN_THUMBL, BTN_THUMBR }) SetBit(IOC(1, 'U', 101, 4), key);
+            foreach (var abs in new[] { ABS_X, ABS_Y, ABS_RX, ABS_RY, ABS_Z, ABS_RZ, ABS_HAT0X, ABS_HAT0Y }) SetBit(IOC(1, 'U', 103, 4), abs);
+            var setup = new UInputSetup { Id = new InputId { Bus = 0x03, Vendor = 0x1209, Product = 0x0001, Version = 1 }, Name = "RemoteGamepad" };
+            if (ioctl(_fd, IOC(1, 'U', 3, Marshal.SizeOf<UInputSetup>()), ref setup) < 0) Fail("UI_DEV_SETUP");
+            foreach (var axis in new[] { ABS_X, ABS_Y, ABS_RX, ABS_RY }) SetAbs(axis, -32768, 32767);
+            foreach (var axis in new[] { ABS_Z, ABS_RZ }) SetAbs(axis, 0, 255);
+            foreach (var axis in new[] { ABS_HAT0X, ABS_HAT0Y }) SetAbs(axis, -1, 1);
+            if (ioctl(_fd, IOC(0, 'U', 1, 0), 0) < 0) Fail("UI_DEV_CREATE");
+            Console.WriteLine("[UINPUT] Virtual gamepad created");
         }
-        catch (Exception ex)
-        {
-            _available = false;
-            Console.WriteLine($"[VIGEM] WARNING: Could not initialize virtual controller. " +
-                $"Ensure ViGEmBus driver is installed. Error: {ex.Message}");
-            Console.WriteLine("[VIGEM] Server will continue in passthrough mode (no virtual output).");
-        }
+        catch { close(_fd); _fd = -1; throw; }
     }
 
-    /// <summary>
-    /// Apply a parsed controller state to the virtual Xbox 360 gamepad.
-    /// </summary>
-    public void Update(InputParser.ControllerState state)
+    public void Update(InputParser.ControllerState s)
     {
-        if (!_available || _controller == null) return;
-
-        // Buttons
-        _controller.SetButtonState(Xbox360Button.A, state.A);
-        _controller.SetButtonState(Xbox360Button.B, state.B);
-        _controller.SetButtonState(Xbox360Button.X, state.X);
-        _controller.SetButtonState(Xbox360Button.Y, state.Y);
-
-        _controller.SetButtonState(Xbox360Button.LeftShoulder, state.Lb);
-        _controller.SetButtonState(Xbox360Button.RightShoulder, state.Rb);
-
-        _controller.SetButtonState(Xbox360Button.Start, state.Start);
-        _controller.SetButtonState(Xbox360Button.Back, state.Select);
-
-        _controller.SetButtonState(Xbox360Button.LeftThumb, state.L3);
-        _controller.SetButtonState(Xbox360Button.RightThumb, state.R3);
-
-        // D-pad
-        _controller.SetButtonState(Xbox360Button.Up, state.DUp);
-        _controller.SetButtonState(Xbox360Button.Down, state.DDown);
-        _controller.SetButtonState(Xbox360Button.Left, state.DLeft);
-        _controller.SetButtonState(Xbox360Button.Right, state.DRight);
-
-        // Axes: float [-1, 1] → short [-32768, 32767]
-        _controller.SetAxisValue(Xbox360Axis.LeftThumbX, FloatToShort(state.Lx));
-        _controller.SetAxisValue(Xbox360Axis.LeftThumbY, FloatToShort(state.Ly));
-        _controller.SetAxisValue(Xbox360Axis.RightThumbX, FloatToShort(state.Rx));
-        _controller.SetAxisValue(Xbox360Axis.RightThumbY, FloatToShort(state.Ry));
-
-        // Triggers: float [0, 1] → byte [0, 255]
-        _controller.SetSliderValue(Xbox360Slider.LeftTrigger, FloatToByte(state.Lt));
-        _controller.SetSliderValue(Xbox360Slider.RightTrigger, FloatToByte(state.Rt));
-
-        _controller.SubmitReport();
+        if (_fd < 0) return;
+        foreach (var (key, value) in new[] { (BTN_SOUTH,s.A),(BTN_EAST,s.B),(BTN_WEST,s.X),(BTN_NORTH,s.Y),(BTN_TL,s.Lb),(BTN_TR,s.Rb),(BTN_START,s.Start),(BTN_SELECT,s.Select),(BTN_MODE,false),(BTN_THUMBL,s.L3),(BTN_THUMBR,s.R3) }) Key(key,value);
+        Axis(ABS_X, Scale(s.Lx)); Axis(ABS_Y, Scale(s.Ly)); Axis(ABS_RX, Scale(s.Rx)); Axis(ABS_RY, Scale(s.Ry)); Axis(ABS_Z,(int)(s.Lt*255)); Axis(ABS_RZ,(int)(s.Rt*255));
+        Axis(ABS_HAT0X, (s.DRight?1:0)-(s.DLeft?1:0)); Axis(ABS_HAT0Y, (s.DDown?1:0)-(s.DUp?1:0)); Sync();
     }
-
-    /// <summary>
-    /// Reset all buttons and axes to neutral.
-    /// </summary>
-    public void Reset()
-    {
-        if (!_available || _controller == null) return;
-
-        _controller.SetButtonState(Xbox360Button.A, false);
-        _controller.SetButtonState(Xbox360Button.B, false);
-        _controller.SetButtonState(Xbox360Button.X, false);
-        _controller.SetButtonState(Xbox360Button.Y, false);
-        _controller.SetButtonState(Xbox360Button.LeftShoulder, false);
-        _controller.SetButtonState(Xbox360Button.RightShoulder, false);
-        _controller.SetButtonState(Xbox360Button.Start, false);
-        _controller.SetButtonState(Xbox360Button.Back, false);
-        _controller.SetButtonState(Xbox360Button.LeftThumb, false);
-        _controller.SetButtonState(Xbox360Button.RightThumb, false);
-        _controller.SetButtonState(Xbox360Button.Up, false);
-        _controller.SetButtonState(Xbox360Button.Down, false);
-        _controller.SetButtonState(Xbox360Button.Left, false);
-        _controller.SetButtonState(Xbox360Button.Right, false);
-
-        _controller.SetAxisValue(Xbox360Axis.LeftThumbX, 0);
-        _controller.SetAxisValue(Xbox360Axis.LeftThumbY, 0);
-        _controller.SetAxisValue(Xbox360Axis.RightThumbX, 0);
-        _controller.SetAxisValue(Xbox360Axis.RightThumbY, 0);
-
-        _controller.SetSliderValue(Xbox360Slider.LeftTrigger, 0);
-        _controller.SetSliderValue(Xbox360Slider.RightTrigger, 0);
-
-        _controller.SubmitReport();
-    }
-
-    public void Dispose()
-    {
-        Reset();
-        _controller?.Disconnect();
-        _client?.Dispose();
-    }
-
-    private static short FloatToShort(float v)
-    {
-        // Map [-1, 1] to [-32768, 32767]
-        return (short)(v * 32767f);
-    }
-
-    private static byte FloatToByte(float v)
-    {
-        // Map [0, 1] to [0, 255]
-        return (byte)(v * 255f);
-    }
+    public void Reset() { if (_fd >= 0) Update(default); }
+    private static int Scale(float f) => (int)(Math.Clamp(f,-1,1)*32767);
+    private void Key(int c,bool v)=>Event(EV_KEY,c,v?1:0); private void Axis(int c,int v)=>Event(EV_ABS,c,v); private void Sync()=>Event(EV_SYN,SYN_REPORT,0);
+    private void Event(ushort type,ushort code,int value) { var e = new InputEvent { Type=type, Code=code, Value=value }; if(write(_fd,ref e,(nuint)Marshal.SizeOf<InputEvent>())<0) Fail("writing input event"); }
+    private void SetBit(uint request,int bit) { if(ioctl(_fd,request,bit)<0) Fail("setting uinput capability"); }
+    private void SetAbs(int axis,int min,int max) { var a=new UInputAbsSetup { Code=(ushort)axis, AbsInfo=new AbsInfo { Minimum=min,Maximum=max } }; if(ioctl(_fd,IOC(1,'U',4,Marshal.SizeOf<UInputAbsSetup>()),ref a)<0) Fail("UI_ABS_SETUP"); }
+    private static void Fail(string operation)=>throw new IOException($"uinput {operation} failed: {Marshal.GetLastPInvokeError()}");
+    private static uint IOC(int dir,char type,int nr,int size)=>(uint)((dir<<30)|(size<<16)|(type<<8)|nr);
+    public void Dispose() { if(_fd<0)return; Reset(); ioctl(_fd,IOC(0,'U',2,0),0); close(_fd); _fd=-1; }
+    [StructLayout(LayoutKind.Sequential)] private struct InputId { public ushort Bus,Vendor,Product,Version; }
+    [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Ansi)] private struct UInputSetup { public InputId Id; [MarshalAs(UnmanagedType.ByValTStr,SizeConst=80)] public string Name; public uint FfEffectsMax; }
+    [StructLayout(LayoutKind.Sequential)] private struct AbsInfo { public int Value,Minimum,Maximum,Fuzz,Flat,Resolution; }
+    [StructLayout(LayoutKind.Sequential)] private struct UInputAbsSetup { public ushort Code; public AbsInfo AbsInfo; }
+    [StructLayout(LayoutKind.Sequential)] private struct InputEvent { public long Seconds, Microseconds; public ushort Type,Code; public int Value; }
+    [DllImport("libc",SetLastError=true,CharSet=CharSet.Ansi)] private static extern int open(string path,int flags);
+    [DllImport("libc",SetLastError=true)] private static extern int close(int fd);
+    [DllImport("libc",SetLastError=true)] private static extern long write(int fd,ref InputEvent data,nuint count);
+    [DllImport("libc",SetLastError=true,EntryPoint="ioctl")] private static extern int ioctl(int fd,uint request,int value);
+    [DllImport("libc",SetLastError=true,EntryPoint="ioctl")] private static extern int ioctl(int fd,uint request,ref UInputSetup setup);
+    [DllImport("libc",SetLastError=true,EntryPoint="ioctl")] private static extern int ioctl(int fd,uint request,ref UInputAbsSetup setup);
 }
