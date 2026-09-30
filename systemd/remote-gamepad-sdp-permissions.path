@@ -1,0 +1,13 @@
+[Unit]
+Description=Watch for BlueZ local SDP socket creation and recreation
+Before=bluetooth.service
+
+[Path]
+# BlueZ creates/removes this compatibility socket as bluetoothd starts/stops.
+# PathChanged tracks existence transitions, not ongoing socket traffic.
+PathChanged=/run/sdp
+Unit=remote-gamepad-sdp-permissions.service
+
+[Install]
+# Start the watcher before bluetoothd without overriding its vendor unit.
+WantedBy=bluetooth.service

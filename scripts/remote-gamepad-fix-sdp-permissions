@@ -1,0 +1,38 @@
+#!/bin/sh
+set -eu
+
+socket=/run/sdp
+
+# The path unit may observe deletion as well as creation. A missing socket is
+# expected while bluetoothd is stopping/restarting, so this is a successful no-op.
+[ -S "$socket" ] || exit 0
+
+bluetooth_gid=$(getent group bluetooth | cut -d: -f3)
+if [ -z "$bluetooth_gid" ]; then
+    echo "Required system group 'bluetooth' does not exist." >&2
+    exit 1
+fi
+
+current_gid=$(stat -c '%g' -- "$socket") || {
+    [ -S "$socket" ] || exit 0
+    exit 1
+}
+if [ "$current_gid" != "$bluetooth_gid" ]; then
+    chgrp bluetooth -- "$socket" || {
+        [ -S "$socket" ] || exit 0
+        exit 1
+    }
+fi
+
+current_mode=$(stat -c '%a' -- "$socket") || {
+    [ -S "$socket" ] || exit 0
+    exit 1
+}
+if [ "$current_mode" != 660 ]; then
+    chmod 0660 -- "$socket" || {
+        [ -S "$socket" ] || exit 0
+        exit 1
+    }
+fi
+
+echo "Ensured $socket is root:bluetooth mode 0660."

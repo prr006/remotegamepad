@@ -1,0 +1,7 @@
+[Unit]
+Description=Grant the bluetooth group access to BlueZ's local SDP socket
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/libexec/remote-gamepad-fix-sdp-permissions

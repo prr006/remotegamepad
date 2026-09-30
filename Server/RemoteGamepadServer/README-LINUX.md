@@ -87,7 +87,41 @@ The virtual input identity is BUS `0x03`, VID `0x045e`, PID `0x028e`, version `0
 
 ## Bluetooth Classic / SPP
 
-Adapter discovery/power/discoverability use InTheHand 32feet.NET 4.2.5 (`BluetoothRadio.Default`); RFCOMM uses Linux Bluetooth sockets and native BlueZ/libbluetooth SDP APIs (Ubuntu runtime library `libbluetooth.so.3`, provided by the `bluez` package). The server binds RFCOMM channel 1 and registers the standard SPP UUID `00001101-0000-1000-8000-00805F9B34FB`, with L2CAP and RFCOMM protocol descriptors, Public Browse Group membership, and the service name `RemoteGamepad`. Registration is removed and its SDP session closed when the listener stops. No external SDP tool, manual service setup, root access, or Bluetooth group workaround is required. Do not interpret the startup log as proof that Android discovery/connect has been hardware-tested. The Bluetooth listener handles the existing 4-byte big-endian length-prefixed UTF-8 protocol (`HELLO`/`HELLO_ACK`, `PING`/`PONG`, `DISCONNECT`, and `INPUT|{json}`). UDP and RFCOMM share the same uinput device; each complete state update replaces the previous state (last update wins).
+Adapter discovery/power/discoverability use InTheHand 32feet.NET 4.2.5 (`BluetoothRadio.Default`); RFCOMM uses Linux Bluetooth sockets and native BlueZ/libbluetooth SDP APIs (Ubuntu runtime library `libbluetooth.so.3`, provided by the `bluez` package). The server binds RFCOMM channel 1 and registers the standard SPP UUID `00001101-0000-1000-8000-00805F9B34FB`, with L2CAP and RFCOMM protocol descriptors, Public Browse Group membership, and the service name `RemoteGamepad`. Registration is removed and its SDP session closed when the listener stops. The process remains unprivileged; the one-time system setup below installs an event-driven systemd path unit so members of the `bluetooth` group can access BlueZ's `/run/sdp` socket after every daemon start/restart. No external SDP tool, per-launch privileged command, or modification/override of Ubuntu's `bluetooth.service` is used. The Bluetooth listener handles the existing 4-byte big-endian length-prefixed UTF-8 protocol (`HELLO`/`HELLO_ACK`, `PING`/`PONG`, `DISCONNECT`, and `INPUT|{json}`). UDP and RFCOMM share the same uinput device; each complete state update replaces the previous state (last update wins).
+
+### Persistent local SDP socket permissions
+
+BlueZ compatibility-mode SDP registration connects to `/run/sdp`. On Ubuntu this socket is commonly recreated as `root:root` mode `0660`, which prevents an unprivileged user service from registering a record even when its user belongs to `bluetooth`. Do not add `ExecStartPost` to the vendor Bluetooth unit: the socket may not exist when that command runs.
+
+Install the small system-level watcher once from the repository checkout:
+
+```sh
+sudo ./scripts/install-linux-sdp-permissions.sh
+```
+
+The installer places a oneshot helper and a systemd `.path` unit in `/etc/systemd/system`, and the helper in `/usr/local/libexec`. The path unit is enabled as a `Wants=` dependency of `bluetooth.service` and ordered `Before=bluetooth.service`, so it begins watching before BlueZ starts. It observes `/run/sdp` existence changes and starts the helper only on those events; the helper verifies the path is a socket, then sets `root:bluetooth` and mode `0660`. The watcher is ordered before `bluetooth.service`, while the short helper itself is deliberately not ordered after the daemon: when BlueZ removes the socket during a restart, the helper immediately no-ops so the watcher can re-arm before BlueZ recreates it. The initial installer also runs the same helper once for an already-running daemon. Nothing polls continuously, no vendor unit is replaced/overridden, and a missing socket is a safe no-op. The application itself never changes socket permissions or invokes `sudo`.
+
+The account running the user service must be a member of `bluetooth`; after changing group membership, log out and back in so the user service inherits the new supplementary group. Check the installed state and behavior:
+
+```sh
+id -nG
+stat -c '%U:%G %a %n' /run/sdp
+systemctl status remote-gamepad-sdp-permissions.path
+systemctl status remote-gamepad-sdp-permissions.service
+sudo systemctl restart bluetooth
+stat -c '%U:%G %a %n' /run/sdp
+journalctl -u remote-gamepad-sdp-permissions.service -b --no-pager
+```
+
+After the restart, the expected socket is `root:bluetooth 660`; Wi-Fi and RFCOMM remain managed by the normal unprivileged RemoteGamepad user service.
+
+To remove the integration and restore `root:root 0660` on the current socket (if present):
+
+```sh
+sudo ./scripts/uninstall-linux-sdp-permissions.sh
+```
+
+The watcher is appropriate here because native RFCOMM and SDP registration already work; migrating to BlueZ `ProfileManager1` would replace the proven RFCOMM socket acceptor with a D-Bus-owned profile/FD lifecycle and is not needed to persist this narrowly scoped socket access policy.
 
 Check the adapter state with:
 
