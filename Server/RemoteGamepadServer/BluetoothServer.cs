@@ -72,7 +72,9 @@ public sealed class BluetoothServer : IDisposable
         IntPtr record = IntPtr.Zero, session = IntPtr.Zero;
         IntPtr serviceUuid = IntPtr.Zero, browseUuid = IntPtr.Zero;
         IntPtr serviceList = IntPtr.Zero, browseList = IntPtr.Zero;
-        IntPtr protocolAttribute = IntPtr.Zero;
+        IntPtr l2capUuid = IntPtr.Zero, rfcommUuid = IntPtr.Zero, channelData = IntPtr.Zero;
+        IntPtr l2capProtocol = IntPtr.Zero, rfcommProtocol = IntPtr.Zero;
+        IntPtr accessSequence = IntPtr.Zero, accessProtocols = IntPtr.Zero;
         try
         {
             // BDADDR_ANY source + BDADDR_LOCAL destination selects the local SDP daemon.
@@ -87,31 +89,24 @@ public sealed class BluetoothServer : IDisposable
             browseUuid = CreateUuid(0x1002);
             serviceList = Append(IntPtr.Zero, serviceUuid);
             browseList = Append(IntPtr.Zero, browseUuid);
-            if (sdp_set_uuidseq_attr(record, 0x0001, serviceList) < 0 ||
-                sdp_set_uuidseq_attr(record, 0x0005, browseList) < 0)
+            if (SetServiceClasses(record, serviceList) < 0 || SetBrowseGroups(record, browseList) < 0)
                 ThrowSdp("building SPP service UUID attributes");
-            var serviceIdData = sdp_data_alloc(0x19, new ushort[] { 0x1101 });
-            if (serviceIdData == IntPtr.Zero || sdp_attr_add(record, 0x0003, serviceIdData) < 0)
-            {
-                if (serviceIdData != IntPtr.Zero) sdp_data_free(serviceIdData);
-                ThrowSdp("setting the SPP service ID");
-            }
+            sdp_set_service_id(record, Marshal.PtrToStructure<SdpUuid>(serviceUuid));
 
-            var l2capUuidData = sdp_data_alloc(0x19, new ushort[] { 0x0100 });
-            var l2capSequence = MakeSequence(l2capUuidData);
-            var rfcommUuidData = sdp_data_alloc(0x19, new ushort[] { 0x0003 });
-            var rfcommChannelData = sdp_data_alloc(0x08, new byte[] { RfcommChannel });
-            var rfcommSequence = MakeSequence(rfcommUuidData, rfcommChannelData);
-            var protocolFields = MakeSequence(l2capSequence, rfcommSequence);
-            protocolAttribute = sdp_data_alloc(0x35, protocolFields);
-            if (protocolAttribute == IntPtr.Zero)
-            {
-                sdp_data_free(protocolFields);
-                throw new OutOfMemoryException("BlueZ could not allocate the SDP protocol attribute.");
-            }
-            if (sdp_attr_add(record, 0x0004, protocolAttribute) < 0)
+            // Mirror BlueZ sdptool's native access-protocol list shape: outer
+            // access list -> sequence of protocol descriptors -> each descriptor.
+            l2capUuid = CreateUuid(0x0100);
+            l2capProtocol = Append(IntPtr.Zero, l2capUuid);
+            accessSequence = Append(IntPtr.Zero, l2capProtocol);
+            rfcommUuid = CreateUuid(0x0003);
+            rfcommProtocol = Append(IntPtr.Zero, rfcommUuid);
+            channelData = sdp_data_alloc(0x08, new byte[] { RfcommChannel });
+            if (channelData == IntPtr.Zero) throw new OutOfMemoryException("BlueZ could not allocate the RFCOMM channel descriptor.");
+            rfcommProtocol = Append(rfcommProtocol, channelData);
+            accessSequence = Append(accessSequence, rfcommProtocol);
+            accessProtocols = Append(IntPtr.Zero, accessSequence);
+            if (sdp_set_access_protos(record, accessProtocols) < 0)
                 ThrowSdp("building L2CAP/RFCOMM protocol attributes");
-            protocolAttribute = IntPtr.Zero; // The record now owns the complete nested data tree.
             sdp_set_info_attr(record, "RemoteGamepad", "", "RemoteGamepad Bluetooth gamepad server");
             if (sdp_record_register(session, record, 0) < 0) ThrowSdp("registering the SPP service record");
 
@@ -123,9 +118,13 @@ public sealed class BluetoothServer : IDisposable
         finally
         {
             FreeList(serviceList); FreeList(browseList);
+            FreeList(l2capProtocol); FreeList(rfcommProtocol);
+            FreeList(accessSequence); FreeList(accessProtocols);
+            if (channelData != IntPtr.Zero) sdp_data_free(channelData);
             if (serviceUuid != IntPtr.Zero) Marshal.FreeHGlobal(serviceUuid);
             if (browseUuid != IntPtr.Zero) Marshal.FreeHGlobal(browseUuid);
-            if (protocolAttribute != IntPtr.Zero) sdp_data_free(protocolAttribute);
+            if (l2capUuid != IntPtr.Zero) Marshal.FreeHGlobal(l2capUuid);
+            if (rfcommUuid != IntPtr.Zero) Marshal.FreeHGlobal(rfcommUuid);
             if (record != IntPtr.Zero) sdp_record_free(record);
             if (session != IntPtr.Zero) sdp_close(session);
         }
@@ -157,23 +156,10 @@ public sealed class BluetoothServer : IDisposable
         if (list != IntPtr.Zero) sdp_list_free(list, IntPtr.Zero);
     }
 
-    private static IntPtr MakeSequence(params IntPtr[] fields)
-    {
-        if (fields.Length == 0 || fields.Any(field => field == IntPtr.Zero))
-        {
-            foreach (var field in fields) if (field != IntPtr.Zero) sdp_data_free(field);
-            throw new OutOfMemoryException("BlueZ could not allocate SDP protocol descriptor data.");
-        }
-        var sequence = fields[0];
-        for (var i = 1; i < fields.Length; i++) sequence = sdp_seq_append(sequence, fields[i]);
-        var wrapped = sdp_data_alloc(0x35, sequence);
-        if (wrapped == IntPtr.Zero)
-        {
-            sdp_data_free(sequence);
-            throw new OutOfMemoryException("BlueZ could not allocate an SDP sequence.");
-        }
-        return wrapped;
-    }
+    // BlueZ declares service-class and browse-group setters as header-inline
+    // wrappers, so call their exported implementation with the official IDs.
+    private static int SetServiceClasses(IntPtr record, IntPtr sequence) => sdp_set_uuidseq_attr(record, 0x0001, sequence);
+    private static int SetBrowseGroups(IntPtr record, IntPtr sequence) => sdp_set_uuidseq_attr(record, 0x0005, sequence);
 
     private static void ThrowSdp(string operation)
     {
@@ -334,15 +320,24 @@ public sealed class BluetoothServer : IDisposable
     [DllImport("libbluetooth.so.3", SetLastError = true, EntryPoint = "sdp_record_free")] private static extern void sdp_record_free(IntPtr record);
     [DllImport("libbluetooth.so.3", SetLastError = true)] private static extern int sdp_record_register(IntPtr session, IntPtr record, byte flags);
     [DllImport("libbluetooth.so.3", SetLastError = true)] private static extern int sdp_record_unregister(IntPtr session, IntPtr record);
+    [DllImport("libbluetooth.so.3", SetLastError = true)] private static extern void sdp_set_service_id(IntPtr record, SdpUuid uuid);
     [DllImport("libbluetooth.so.3", SetLastError = true)] private static extern IntPtr sdp_uuid16_create(IntPtr uuid, ushort value);
     [DllImport("libbluetooth.so.3", SetLastError = true)] private static extern IntPtr sdp_list_append(IntPtr list, IntPtr data);
     [DllImport("libbluetooth.so.3", SetLastError = true)] private static extern void sdp_list_free(IntPtr list, IntPtr freeFunction);
     [DllImport("libbluetooth.so.3", SetLastError = true)] private static extern IntPtr sdp_data_alloc(byte dtd, byte[] value);
     [DllImport("libbluetooth.so.3", SetLastError = true)] private static extern void sdp_data_free(IntPtr data);
-    [DllImport("libbluetooth.so.3", SetLastError = true)] private static extern IntPtr sdp_seq_append(IntPtr sequence, IntPtr data);
-    [DllImport("libbluetooth.so.3", SetLastError = true)] private static extern int sdp_attr_add(IntPtr record, ushort attribute, IntPtr data);
     [DllImport("libbluetooth.so.3", SetLastError = true)] private static extern int sdp_set_uuidseq_attr(IntPtr record, ushort attribute, IntPtr sequence);
+    [DllImport("libbluetooth.so.3", SetLastError = true)] private static extern int sdp_set_access_protos(IntPtr record, IntPtr protocols);
     [DllImport("libbluetooth.so.3", SetLastError = true)] private static extern void sdp_set_info_attr(IntPtr record, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, [MarshalAs(UnmanagedType.LPUTF8Str)] string provider, [MarshalAs(UnmanagedType.LPUTF8Str)] string description);
+
+    [StructLayout(LayoutKind.Explicit, Size = 20)] private struct SdpUuid
+    {
+        [FieldOffset(0)] public byte Type;
+        [FieldOffset(4)] public ushort Uuid16;
+        [FieldOffset(4)] public uint Uuid32;
+        [FieldOffset(4)] public ulong Uuid128Low;
+        [FieldOffset(12)] public ulong Uuid128High;
+    }
 
     [StructLayout(LayoutKind.Sequential)] private struct PollFd { public int Fd; public short Events; public short Revents; }
     [DllImport("libc", SetLastError = true, EntryPoint = "socket")] private static extern int bluetoothSocket(int domain, int type, int protocol);
