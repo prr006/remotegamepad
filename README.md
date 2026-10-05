@@ -44,8 +44,19 @@ RemoteGamepad/
 │       └── Program.cs          # Entry point + CLI
 ├── scripts/
 │   ├── build-android.sh
-│   ├── build-server.sh
-│   └── run-server.sh
+│   ├── build-server.sh            # Windows build (publish win-x64)
+│   ├── run-server.sh
+│   ├── setup-linux.sh             # one-time Linux system setup
+│   ├── build-server-linux.sh      # Linux: restore + Release build
+│   ├── run-server-linux.sh        # Linux: run unprivileged
+│   ├── check-linux.sh             # Linux: environment report
+│   ├── test-linux.sh              # Linux: uinput self-test
+│   ├── uninstall-linux.sh         # Linux: remove RemoteGamepad config
+│   ├── lib/remote-gamepad-linux.sh
+│   └── tests/linux-scripts-test.sh
+├── systemd/                       # /run/sdp permission watcher units
+├── docs/
+│   └── Linux.md                   # Linux setup, build, test, run, troubleshooting
 └── README.md
 ```
 
@@ -91,6 +102,32 @@ Install the resulting APK on your Android phone:
 ```bash
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
+
+## Linux Server
+
+The Linux server is the same .NET project. It creates a real gamepad through
+kernel **uinput** and accepts input over **Wi-Fi/UDP** (ports 26760/26761) and,
+optionally, **Bluetooth Classic RFCOMM/SPP**. It always runs as your normal
+user — never with `sudo`.
+
+```bash
+sudo ./scripts/setup-linux.sh     # one-time setup (groups, udev, uinput, BlueZ)
+# log out and back in, then:
+./scripts/check-linux.sh          # environment report
+./scripts/build-server-linux.sh   # restore + Release build
+./scripts/test-linux.sh           # uinput self-test (no Bluetooth required)
+./scripts/run-server-linux.sh     # run the server
+sudo ./scripts/uninstall-linux.sh # remove only RemoteGamepad's configuration
+```
+
+Supported distribution families: **Fedora/RHEL (`dnf`), Debian/Ubuntu (`apt`),
+Arch (`pacman`), openSUSE (`zypper`)** and any other systemd distribution
+(configuration is applied; packages are reported for manual installation).
+Machines without Bluetooth hardware are fully supported in Wi-Fi-only mode.
+
+📖 **Full guide: [docs/Linux.md](docs/Linux.md)** — setup, build, test, run,
+Wi-Fi-only mode, Bluetooth requirements, troubleshooting, uninstall and
+supported distributions.
 
 ## Windows Server
 

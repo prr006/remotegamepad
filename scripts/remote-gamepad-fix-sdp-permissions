@@ -1,38 +1,81 @@
 #!/bin/sh
+# RemoteGamepad: grant the dedicated RemoteGamepad group access to BlueZ's
+# local SDP socket (/run/sdp), which only exists when bluetoothd runs in
+# compatibility mode.
+#
+# Installed by scripts/setup-linux.sh to /usr/local/libexec and started by the
+# remote-gamepad-sdp-permissions.path unit whenever BlueZ creates, recreates or
+# re-chmods the socket. Removed again by scripts/uninstall-linux.sh.
+#
+# Deliberately distro agnostic: the group name is passed in by the unit
+# (Environment=) and defaults to the dedicated RemoteGamepad group. No
+# distribution-specific "bluetooth" group is assumed to exist.
 set -eu
 
-socket=/run/sdp
+socket="${REMOTE_GAMEPAD_SDP_SOCKET:-/run/sdp}"
+group="${REMOTE_GAMEPAD_SDP_GROUP:-remote-gamepad}"
+mode=660
+attempts=10          # ~2s total: bluetoothd chmods the socket shortly after bind()
+sleep_interval=0.2
 
-# The path unit may observe deletion as well as creation. A missing socket is
-# expected while bluetoothd is stopping/restarting, so this is a successful no-op.
-[ -S "$socket" ] || exit 0
-
-bluetooth_gid=$(getent group bluetooth | cut -d: -f3)
-if [ -z "$bluetooth_gid" ]; then
-    echo "Required system group 'bluetooth' does not exist." >&2
+if ! getent group "$group" >/dev/null 2>&1; then
+    echo "RemoteGamepad group '$group' does not exist; run scripts/setup-linux.sh." >&2
     exit 1
 fi
 
-current_gid=$(stat -c '%g' -- "$socket") || {
-    [ -S "$socket" ] || exit 0
-    exit 1
-}
-if [ "$current_gid" != "$bluetooth_gid" ]; then
-    chgrp bluetooth -- "$socket" || {
-        [ -S "$socket" ] || exit 0
-        exit 1
-    }
-fi
+changed=0
+i=0
+while [ "$i" -lt "$attempts" ]; do
+    i=$((i + 1))
 
-current_mode=$(stat -c '%a' -- "$socket") || {
-    [ -S "$socket" ] || exit 0
-    exit 1
-}
-if [ "$current_mode" != 660 ]; then
-    chmod 0660 -- "$socket" || {
-        [ -S "$socket" ] || exit 0
-        exit 1
-    }
-fi
+    # The watcher also fires on deletion. A missing socket is the normal state
+    # while bluetoothd is stopped or restarting, so that is a successful no-op.
+    if [ ! -S "$socket" ]; then
+        [ "$changed" -eq 1 ] && exit 0
+        exit 0
+    fi
 
-echo "Ensured $socket is root:bluetooth mode 0660."
+    current="$(stat -c '%G %a' -- "$socket" 2>/dev/null || true)"
+    if [ -z "$current" ]; then
+        # Socket disappeared between the test and stat(): nothing to do.
+        exit 0
+    fi
+
+    current_group="${current% *}"
+    current_mode="${current#* }"
+
+    if [ "$current_group" != "$group" ]; then
+        if chgrp "$group" -- "$socket" 2>/dev/null; then
+            changed=1
+        elif [ ! -S "$socket" ]; then
+            exit 0
+        else
+            echo "Failed to set group '$group' on $socket." >&2
+            exit 1
+        fi
+    fi
+
+    if [ "$current_mode" != "$mode" ]; then
+        if chmod "0$mode" -- "$socket" 2>/dev/null; then
+            changed=1
+        elif [ ! -S "$socket" ]; then
+            exit 0
+        else
+            echo "Failed to set mode 0$mode on $socket." >&2
+            exit 1
+        fi
+    fi
+
+    # Re-check: bluetoothd applies its own chmod shortly after creating the
+    # socket, so verify the state sticks before reporting success.
+    sleep "$sleep_interval" 2>/dev/null || sleep 1
+    verify="$(stat -c '%G %a' -- "$socket" 2>/dev/null || true)"
+    [ -z "$verify" ] && exit 0
+    if [ "$verify" = "$group $mode" ]; then
+        [ "$changed" -eq 1 ] && echo "Set $socket to root:$group mode 0$mode."
+        exit 0
+    fi
+done
+
+echo "Could not keep $socket at root:$group mode 0$mode (last state: ${verify:-unknown})." >&2
+exit 1

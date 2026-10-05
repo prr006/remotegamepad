@@ -1,7 +1,14 @@
 [Unit]
-Description=Grant the bluetooth group access to BlueZ's local SDP socket
+Description=RemoteGamepad: grant the remote-gamepad group access to BlueZ's local SDP socket
+Documentation=file:/usr/local/libexec/remote-gamepad-fix-sdp-permissions
+# The helper is idempotent and exits immediately when nothing needs changing,
+# so a handful of rapid triggers (bluetoothd restart) must not trip the limit.
+StartLimitIntervalSec=30
+StartLimitBurst=10
 
 [Service]
 Type=oneshot
-User=root
+# Group name is supplied here so the helper stays distribution agnostic.
+# scripts/setup-linux.sh rewrites this line when --group is used.
+Environment=REMOTE_GAMEPAD_SDP_GROUP=remote-gamepad
 ExecStart=/usr/local/libexec/remote-gamepad-fix-sdp-permissions

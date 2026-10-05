@@ -1,13 +1,18 @@
 [Unit]
-Description=Watch for BlueZ local SDP socket creation and recreation
+Description=RemoteGamepad: watch for BlueZ local SDP socket creation and recreation
+# Start watching before bluetoothd so the socket is caught the moment it
+# appears. This never modifies or overrides the vendor bluetooth.service.
 Before=bluetooth.service
 
 [Path]
-# BlueZ creates/removes this compatibility socket as bluetoothd starts/stops.
-# PathChanged tracks existence transitions, not ongoing socket traffic.
+# bluetoothd creates/removes /run/sdp as it starts/stops in compatibility mode
+# and chmods it shortly after bind(). PathChanged reacts to creation, deletion
+# and attribute changes, so the permissions are reapplied in every case.
 PathChanged=/run/sdp
 Unit=remote-gamepad-sdp-permissions.service
 
 [Install]
-# Start the watcher before bluetoothd without overriding its vendor unit.
+# Pulled in by bluetooth.service via /etc/systemd/system/bluetooth.service.wants
+# (a symlink, not an edit of the vendor unit) and also on a normal boot.
 WantedBy=bluetooth.service
+WantedBy=multi-user.target
