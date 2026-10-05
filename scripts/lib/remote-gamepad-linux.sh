@@ -50,6 +50,9 @@ RG_SDP_HELPER="${RG_PREFIX}/usr/local/libexec/remote-gamepad-fix-sdp-permissions
 RG_SDP_PATH_UNIT="remote-gamepad-sdp-permissions.path"
 RG_SDP_SERVICE_UNIT="remote-gamepad-sdp-permissions.service"
 
+# Autostart service: the server itself, running unprivileged at boot.
+RG_SERVICE_UNIT="remote-gamepad.service"
+
 # Optional adapter-visibility helper (setup-linux.sh --discoverable). Never
 # required for RFCOMM/SDP: it only makes pairing from the phone easier.
 RG_DISCOVERABLE_HELPER="${RG_PREFIX}/usr/local/libexec/remote-gamepad-set-discoverable"
@@ -291,6 +294,44 @@ rg_daemon_reload() {
 # --------------------------------------------------------------------------
 rg_dotnet_path() { command -v dotnet 2>/dev/null; }
 
+# Absolute dotnet host for a given user: the system install first, then the
+# per-user installation that dotnet-install.sh creates (root's PATH misses it).
+rg_dotnet_for_user() {
+    local user="${1:-}" candidate home
+    candidate="$(rg_dotnet_path 2>/dev/null || true)"
+    if [ -n "$candidate" ]; then
+        printf '%s' "$candidate"
+        return 0
+    fi
+    for candidate in /usr/lib/dotnet/dotnet /usr/share/dotnet/dotnet /usr/local/bin/dotnet /opt/dotnet/dotnet; do
+        [ -x "$candidate" ] && { printf '%s' "$candidate"; return 0; }
+    done
+    if [ -n "$user" ]; then
+        home="$(rg_user_home "$user" 2>/dev/null || true)"
+        [ -n "$home" ] && [ -x "${home}/.dotnet/dotnet" ] && { printf '%s' "${home}/.dotnet/dotnet"; return 0; }
+    fi
+    return 1
+}
+
+# Target framework of the server project (falls back to the required major).
+rg_server_tfm() {
+    local csproj="${RG_SERVER_DIR:-}/RemoteGamepadServer.csproj" tfm=''
+    if [ -r "$csproj" ]; then
+        tfm="$(sed -n 's|.*<TargetFramework>\([^<]*\)</TargetFramework>.*|\1|p' "$csproj" | head -1)"
+    fi
+    printf '%s' "${tfm:-net${RG_REQUIRED_DOTNET_MAJOR}.0}"
+}
+
+# Absolute path of the Release build output: an existing build wins, otherwise
+# the path the build scripts will produce.
+rg_server_dll() {
+    local dll
+    for dll in "${RG_SERVER_DIR:-}"/bin/Release/*/RemoteGamepadServer.dll; do
+        [ -f "$dll" ] && { printf '%s' "$dll"; return 0; }
+    done
+    printf '%s' "${RG_SERVER_DIR:-}/bin/Release/$(rg_server_tfm)/RemoteGamepadServer.dll"
+}
+
 # Highest installed SDK version string, empty when no SDK is present.
 rg_dotnet_sdk_version() {
     rg_have dotnet || return 1
@@ -525,6 +566,15 @@ rg_user_in_group() {
 # Group membership active in the *current* process (needs re-login otherwise).
 rg_session_in_group() {
     id -nG 2>/dev/null | tr ' ' '\n' | grep -qx -- "$1"
+}
+
+# Home directory of a user, empty when unknown.
+rg_user_home() {
+    [ -n "${1:-}" ] || return 1
+    local home
+    home="$(getent passwd "$1" 2>/dev/null | cut -d: -f6 || true)"
+    [ -n "$home" ] || return 1
+    printf '%s' "$home"
 }
 
 # The human user the configuration is for, even when running under sudo.

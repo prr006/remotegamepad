@@ -48,6 +48,16 @@ if ! rg_have dotnet; then
     exit 1
 fi
 
+# The autostart service already owns UDP 26760/26761 (input/discovery);
+# running a second instance would fail with "address already in use".
+if rg_have systemctl && rg_unit_active "$RG_SERVICE_UNIT"; then
+    rg_err "${RG_SERVICE_UNIT} is already running this server in the background."
+    rg_info "Stop it first:        sudo systemctl stop ${RG_SERVICE_UNIT}"
+    rg_info "Or follow its log:    journalctl -u remote-gamepad -f"
+    rg_info "Disable autostart:    sudo systemctl disable --now ${RG_SERVICE_UNIT}"
+    exit 1
+fi
+
 # ---- preflight (advisory, never fatal except for a missing uinput device) ---
 if ! rg_uinput_exists; then
     rg_err "/dev/uinput does not exist (uinput module state: $(rg_uinput_module_state))."

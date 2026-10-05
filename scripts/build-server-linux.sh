@@ -79,4 +79,9 @@ else
     rg_ok "Build completed."
 fi
 rg_info "Test with: ./scripts/test-linux.sh"
-rg_info "Run with : ./scripts/run-server-linux.sh"
+if rg_have systemctl && rg_unit_exists "$RG_SERVICE_UNIT"; then
+    rg_info "Restart  : sudo systemctl restart ${RG_SERVICE_UNIT}   # pick up this build"
+    rg_info "Log      : journalctl -u remote-gamepad -f"
+else
+    rg_info "Run with : ./scripts/run-server-linux.sh"
+fi

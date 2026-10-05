@@ -53,13 +53,19 @@ Requirements on any distribution:
 git clone <this repository>
 cd RemoteGamepad
 
-sudo ./scripts/setup-linux.sh     # one-time system configuration
+sudo ./scripts/setup-linux.sh     # one-time system configuration (incl. autostart)
 # log out and back in (new group membership), then:
 ./scripts/check-linux.sh          # verify the environment
 ./scripts/build-server-linux.sh   # restore + Release build
 ./scripts/test-linux.sh           # uinput self-test (no Bluetooth needed)
-./scripts/run-server-linux.sh     # run the server as your normal user
+
+sudo systemctl start remote-gamepad    # start now; it already starts at boot
+journalctl -u remote-gamepad -f        # watch the server log
 ```
+
+After that first build the server runs automatically on every boot as your
+normal user. Prefer to start it by hand instead? Use
+`sudo ./scripts/setup-linux.sh --no-autostart` and `./scripts/run-server-linux.sh`.
 
 ---
 
@@ -122,7 +128,13 @@ What it does:
    Because the watcher reacts to attribute changes too, the permissions survive
    `systemctl restart bluetooth`, a reboot, and BlueZ's own `chmod` right after
    it creates the socket.
-7. **Records** what it configured in `/etc/remote-gamepad/setup.env` (used by
+7. **Installs the autostart service** `remote-gamepad.service` into
+   `/etc/systemd/system/`, generated from `systemd/remote-gamepad.service` with
+   the user, repository path and `dotnet` host detected on this machine, then
+   enables it so the server starts at boot. See
+   [Automatic startup](#automatic-startup--remote-gamepadservice).
+   Skip it with `--no-autostart`.
+8. **Records** what it configured in `/etc/remote-gamepad/setup.env` (used by
    `check-linux.sh` and `uninstall-linux.sh`).
 
 ### Options
@@ -135,6 +147,7 @@ What it does:
 | `--no-install` | Never install packages; only report what is missing. |
 | `--no-bluetooth` | Wi-Fi-only machine: skip all BlueZ configuration. |
 | `--no-sdp-tools` | Do not install the optional deprecated BlueZ tools (`sdptool`). |
+| `--no-autostart` | Do not install or enable `remote-gamepad.service`; start the server yourself with `./scripts/run-server-linux.sh`. |
 | `--discoverable` | Optional: power the adapter, make it visible/pairable now and keep it visible across reboots (installs `remote-gamepad-discoverable.service`). Never required for RFCOMM/SDP; a BlueZ refusal is only a warning. |
 | `--no-restart-bluetooth` | Apply the configuration but never restart `bluetooth.service`. |
 | `--restart-bluetooth` | Always restart `bluetooth.service` when something changed. |
@@ -219,6 +232,10 @@ Runs `dotnet run -c Release` from the server directory as your normal user and
 `/dev/uinput` access and warns (without blocking) if `/run/sdp` has unexpected
 permissions. Arguments are passed straight through to the server.
 
+If `remote-gamepad.service` is already running, this script stops with an
+explanation instead of fighting over UDP 26760/26761 — stop the service first
+(`sudo systemctl stop remote-gamepad`) when you want an interactive run.
+
 Stop with `Ctrl+C`: the controller is reset and the uinput device destroyed.
 
 Open UDP **26760** and **26761** in your firewall on the trusted local network,
@@ -237,6 +254,83 @@ printf '{"lx":0.6,"ly":-0.2,"a":true}' | nc -u -w1 SERVER_IP 26760
 
 ---
 
+## Automatic startup — `remote-gamepad.service`
+
+`setup-linux.sh` installs a systemd service so the server is already running
+after a reboot — no terminal, no manual start. The unit is generated from the
+template `systemd/remote-gamepad.service` in this repository; the setup script
+fills in the account, the repository path and the `dotnet` binary it detected,
+so nothing is hard-coded to one machine.
+
+```ini
+[Service]
+User=<your account>                       # never root
+SupplementaryGroups=remote-gamepad input  # /dev/uinput access
+WorkingDirectory=<repo>/Server/RemoteGamepadServer
+ExecStart=<dotnet> <repo>/Server/RemoteGamepadServer/bin/Release/net10.0/RemoteGamepadServer.dll
+Restart=on-failure
+```
+
+What that gives you:
+
+* **Unprivileged.** It runs as the account setup configured, never as root.
+  `/dev/uinput` comes from the `remote-gamepad` group (udev rule) and `/run/sdp`
+  from the SDP permission watcher — exactly like a manual run. (An `input`
+  group is added too, when the distribution has one.)
+* **The compiled Release assembly**, not `dotnet run`: no SDK, no restore and
+  no project build at boot.
+* **Bluetooth stays optional.** The unit only *wants* `bluetooth.service` and
+  `remote-gamepad-sdp-permissions.path`, so a Wi-Fi-only machine without BlueZ
+  or an adapter starts the server normally.
+* **Crash recovery** with `Restart=on-failure` (5 s delay). `Ctrl+C`-style
+  shutdown (`SIGINT`) is used on stop, so the virtual controller is reset and
+  the SDP record unregistered.
+* **Safe before the first build.** `ConditionPathExists=` points at the Release
+  assembly, so the unit is skipped (not restart-looping) until you run
+  `./scripts/build-server-linux.sh`.
+
+### Day-to-day commands
+
+```sh
+systemctl status remote-gamepad        # is it running? since when? last failure?
+sudo systemctl restart remote-gamepad  # after rebuilding the server
+sudo systemctl stop remote-gamepad     # free the UDP ports for a manual run
+journalctl -u remote-gamepad -f        # live log (what the console would print)
+journalctl -u remote-gamepad -b        # everything since this boot
+```
+
+`.service` may be omitted: `remote-gamepad` and `remote-gamepad.service` are the
+same unit.
+
+### Turning it off
+
+```sh
+sudo systemctl disable --now remote-gamepad   # keep the unit file, stop autostart
+sudo ./scripts/setup-linux.sh --no-autostart  # re-run setup without the service
+sudo ./scripts/uninstall-linux.sh             # remove it entirely
+```
+
+### After rebuilding
+
+The service runs the assembly in `bin/Release/net10.0/`, so a new build only
+takes effect after `sudo systemctl restart remote-gamepad` (the build script
+reminds you).
+
+### If it does not come up
+
+```sh
+./scripts/check-linux.sh                       # reports installed/enabled/active + failure reason
+systemctl show -p ActiveState -p Result -p ExecMainStatus remote-gamepad
+journalctl -u remote-gamepad -n 50 --no-pager
+```
+
+Common causes: the Release build does not exist yet (`ConditionPathExists` not
+met — build it), the account is not in the `remote-gamepad` group yet (re-run
+setup), or the repository was moved after setup (re-run setup so the paths are
+regenerated).
+
+---
+
 ## 5. Diagnostics — `scripts/check-linux.sh`
 
 ```sh
@@ -250,8 +344,12 @@ effective `ExecStart`, whether compatibility SDP mode is active (and whether it
 comes from the distribution or from the RemoteGamepad drop-in), adapters,
 `/dev/uinput` ownership and writability, the udev rule and module autoload,
 `/run/sdp` ownership, the SDP watcher units, group membership (including
-whether it is active in your current session) and whether the RemoteGamepad SDP
-record is currently registered.
+whether it is active in your current session), whether the RemoteGamepad SDP
+record is currently registered, and the autostart service — whether
+`remote-gamepad.service` is installed, which user and `ExecStart` it carries,
+whether it is enabled for boot, whether it is active (with its PID), and when
+it is not, the reason (`Result`, exit status, unmet start condition, restart
+count) plus the `journalctl` command to read the log.
 
 Exit codes: `0` ready, `1` blocking problem, `2` warnings with `--strict`.
 Bluetooth findings are warnings only — a Wi-Fi-only machine still exits `0`.
@@ -412,6 +510,8 @@ Removes **only** what the setup script created:
 * `/etc/modules-load.d/remote-gamepad-uinput.conf`
 * `/etc/systemd/system/bluetooth.service.d/10-remote-gamepad-compat.conf`
   (and the drop-in directory if it is left empty)
+* `/etc/systemd/system/remote-gamepad.service` (stopped and disabled first) and
+  its `multi-user.target.wants` symlink
 * `/etc/systemd/system/remote-gamepad-sdp-permissions.{path,service}` and their
   `.wants` symlinks
 * `/usr/local/libexec/remote-gamepad-fix-sdp-permissions`
@@ -435,9 +535,12 @@ pass `--remove-group`.
   runs the setup/check/test/uninstall scripts against simulated Fedora, Ubuntu,
   Arch, Debian-with-`--compat` and unknown-distro environments (stubbed `PATH`
   plus `--dry-run`), performs a full install → re-install → uninstall cycle with
-  real file writes redirected into a scratch directory, unit-tests the shared
-  helpers in `scripts/lib/remote-gamepad-linux.sh`, and exercises the `/run/sdp`
-  helper against a real Unix socket. It needs no root and changes nothing on the
+  real file writes redirected into a scratch directory, checks the generated
+  `remote-gamepad.service` (correct user, non-root, Release assembly, no
+  `dotnet run`, enabled at boot, removed again by the uninstaller, skipped with
+  `--no-autostart`), unit-tests the shared helpers in
+  `scripts/lib/remote-gamepad-linux.sh`, and exercises the `/run/sdp` helper
+  against a real Unix socket. It needs no root and changes nothing on the
   host.
 * **Test hooks** (only for that harness, never needed in normal use):
   `REMOTE_GAMEPAD_PREFIX` relocates every managed path under a scratch root (and
@@ -448,6 +551,15 @@ pass `--remove-group`.
 * **Re-running `setup-linux.sh` is cheap:** files are compared before they are
   written, and `bluetooth.service` is only restarted when the configuration
   actually changed or the running daemon was started without `--compat`.
+* **The autostart unit is generated, not copied:** `systemd/remote-gamepad.service`
+  is a template with placeholders for the user, supplementary groups, working
+  directory, `dotnet` host and Release assembly. `setup-linux.sh` substitutes
+  them and writes `/etc/systemd/system/remote-gamepad.service`, so the same
+  repository works on any machine and for any account. Groups that do not exist
+  on the host (for example `input`) are filtered out, because systemd refuses to
+  start a unit whose `SupplementaryGroups=` cannot be resolved. Keep local
+  changes in a drop-in (`sudo systemctl edit remote-gamepad`) — re-running setup
+  rewrites the unit.
 * **Shared library:** all Linux scripts source
   `scripts/lib/remote-gamepad-linux.sh`, which holds the paths, group name,
   detection helpers and the dry-run-aware execution helpers.

@@ -1,0 +1,41 @@
+[Unit]
+# Template. scripts/setup-linux.sh substitutes the placeholders below with the
+# user, repository path and dotnet host it detects on this machine, then installs
+# the result as /etc/systemd/system/remote-gamepad.service. Do not install this
+# file directly; run the setup script instead.
+Description=RemoteGamepad server (virtual gamepad over Wi-Fi and Bluetooth)
+Documentation=https://github.com/prr006/remotegamepad/blob/main/docs/Linux.md
+After=network-online.target bluetooth.service remote-gamepad-sdp-permissions.path
+# Wants, never Requires/BindsTo: Bluetooth is optional, so a Wi-Fi-only machine
+# (no BlueZ, no adapter, no SDP watcher) still starts the server normally.
+Wants=network-online.target
+Wants=bluetooth.service
+Wants=remote-gamepad-sdp-permissions.path
+# Before the first build there is nothing to run: skip instead of restart-looping.
+ConditionPathExists=@RG_SERVER_DLL@
+
+[Service]
+Type=simple
+# Never root: the server needs no privileges. /dev/uinput comes from the
+# dedicated group (udev rule) and /run/sdp from the SDP permission watcher.
+User=@RG_USER@
+SupplementaryGroups=@RG_SUPPLEMENTARY_GROUPS@
+WorkingDirectory=@RG_SERVER_DIR@
+# The compiled Release assembly: no SDK and no project build needed at boot.
+ExecStart=@RG_DOTNET@ @RG_SERVER_DLL@
+Restart=on-failure
+RestartSec=5
+# SIGINT reaches Console.CancelKeyPress, so the virtual controller is reset and
+# the SDP record unregistered before the process exits.
+KillSignal=SIGINT
+TimeoutStopSec=15
+SyslogIdentifier=remote-gamepad
+Environment=DOTNET_NOLOGO=1
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+NoNewPrivileges=yes
+PrivateTmp=yes
+# Deliberately NOT sandboxed further: PrivateDevices= would hide /dev/uinput and
+# ProtectHome= would hide a repository checkout under /home.
+
+[Install]
+WantedBy=multi-user.target

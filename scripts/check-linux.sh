@@ -265,6 +265,72 @@ else
 fi
 
 # --------------------------------------------------------------------------
+rg_section "Automatic startup"
+SERVICE_UNIT_PATH="${RG_SYSTEMD_UNIT_DIR}/${RG_SERVICE_UNIT}"
+if [ -f "$SERVICE_UNIT_PATH" ]; then
+    rg_field "Service unit" "$SERVICE_UNIT_PATH" ok
+    SVC_USER="$(sed -n 's/^User=//p' "$SERVICE_UNIT_PATH" | head -1)"
+    SVC_EXEC="$(sed -n 's/^ExecStart=//p' "$SERVICE_UNIT_PATH" | head -1)"
+    if [ "$SVC_USER" = "root" ]; then
+        rg_field "Runs as" "root — the server is meant to run unprivileged" fail; problem
+    else
+        rg_field "Runs as" "${SVC_USER:-unknown}" "$([ -n "$SVC_USER" ] && echo ok || echo warn)"
+    fi
+    rg_field "ExecStart" "${SVC_EXEC:-unknown}"
+    SVC_GROUPS="$(sed -n 's/^SupplementaryGroups=//p' "$SERVICE_UNIT_PATH" | head -1)"
+    if [ -n "$SVC_GROUPS" ]; then
+        rg_field "Supplementary groups" "$SVC_GROUPS"
+    fi
+
+    if rg_have systemctl; then
+        if rg_unit_enabled "$RG_SERVICE_UNIT"; then
+            rg_field "Starts at boot" "enabled" ok
+        else
+            rg_field "Starts at boot" "$(rg_unit_state "$RG_SERVICE_UNIT" 2>/dev/null || echo disabled) — sudo systemctl enable ${RG_SERVICE_UNIT}" warn; warning
+        fi
+        if rg_unit_active "$RG_SERVICE_UNIT"; then
+            MAIN_PID="$(systemctl show -p MainPID --value "$RG_SERVICE_UNIT" 2>/dev/null || true)"
+            SINCE="$(systemctl show -p ActiveEnterTimestamp --value "$RG_SERVICE_UNIT" 2>/dev/null || true)"
+            rg_field "Status" "active (running)${MAIN_PID:+, PID ${MAIN_PID}}" ok
+            if [ -n "$SINCE" ]; then
+                rg_field "Active since" "$SINCE"
+            fi
+        else
+            ACTIVE_STATE="$(systemctl show -p ActiveState --value "$RG_SERVICE_UNIT" 2>/dev/null || echo unknown)"
+            SUB_STATE="$(systemctl show -p SubState --value "$RG_SERVICE_UNIT" 2>/dev/null || true)"
+            RESULT="$(systemctl show -p Result --value "$RG_SERVICE_UNIT" 2>/dev/null || true)"
+            EXIT_STATUS="$(systemctl show -p ExecMainStatus --value "$RG_SERVICE_UNIT" 2>/dev/null || true)"
+            CONDITION="$(systemctl show -p ConditionResult --value "$RG_SERVICE_UNIT" 2>/dev/null || true)"
+            NRESTARTS="$(systemctl show -p NRestarts --value "$RG_SERVICE_UNIT" 2>/dev/null || true)"
+            rg_field "Status" "${ACTIVE_STATE}${SUB_STATE:+ (${SUB_STATE})}" warn; warning
+            if [ -n "$RESULT" ] && [ "$RESULT" != "success" ]; then
+                rg_field "  Last result" "$RESULT" warn
+            fi
+            if [ -n "$EXIT_STATUS" ] && [ "$EXIT_STATUS" != "0" ]; then
+                rg_field "  Exit status" "$EXIT_STATUS" warn
+            fi
+            if [ "$CONDITION" = "no" ]; then
+                rg_field "  Start condition" "not met — the Release build is missing (./scripts/build-server-linux.sh)" warn
+            fi
+            if [ -n "$NRESTARTS" ] && [ "$NRESTARTS" != "0" ]; then
+                rg_field "  Restarts" "$NRESTARTS"
+            fi
+            rg_info "Recent log: journalctl -u remote-gamepad -n 20 --no-pager"
+        fi
+    else
+        rg_field "Status" "systemctl not available" warn; warning
+    fi
+    rg_info "Manage with:"
+    rg_info "  systemctl status ${RG_SERVICE_UNIT}"
+    rg_info "  sudo systemctl restart ${RG_SERVICE_UNIT}"
+    rg_info "  sudo systemctl stop ${RG_SERVICE_UNIT}"
+    rg_info "  journalctl -u remote-gamepad -f"
+else
+    rg_field "Service unit" "not installed (sudo ./scripts/setup-linux.sh, or --no-autostart to opt out)"
+    rg_info "Without it, start the server manually: ./scripts/run-server-linux.sh"
+fi
+
+# --------------------------------------------------------------------------
 rg_section "RemoteGamepad configuration"
 if [ -f "$RG_STATE_FILE" ]; then
     rg_field "Setup state" "$RG_STATE_FILE" ok

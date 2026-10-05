@@ -10,7 +10,9 @@
 #   * the uinput module loaded at boot,
 #   * BlueZ compatibility (SDP) mode enabled through a systemd drop-in,
 #   * persistent root:remote-gamepad 0660 permissions on /run/sdp across
-#     reboots and "systemctl restart bluetooth".
+#     reboots and "systemctl restart bluetooth",
+#   * a remote-gamepad.service unit that starts the server at boot as the
+#     configured user (never root); opt out with --no-autostart.
 #
 # The script is idempotent, safe to re-run, never edits vendor unit files and
 # works on Wi-Fi-only machines that have no Bluetooth hardware at all.
@@ -28,6 +30,7 @@ DO_INSTALL=1
 DO_BLUETOOTH=1
 DO_SDP_TOOLS=1
 DO_DISCOVERABLE=0
+DO_AUTOSTART=1
 RESTART_BLUETOOTH=auto
 RG_TARGET_USER="${RG_TARGET_USER:-}"
 
@@ -53,6 +56,8 @@ Options:
                           keep it visible across reboots (installs
                           ${RG_DISCOVERABLE_UNIT}). RFCOMM/SDP work
                           without it, so a failure is only a warning.
+      --no-autostart      Do not install the systemd service that starts the
+                          server automatically at boot.
       --no-restart-bluetooth
                           Apply the Bluetooth configuration but never restart
                           bluetooth.service (takes effect on next restart).
@@ -67,6 +72,7 @@ Examples:
   sudo ./scripts/setup-linux.sh --yes           # unattended
   sudo ./scripts/setup-linux.sh --no-bluetooth  # Wi-Fi-only machine
   sudo ./scripts/setup-linux.sh --discoverable  # also keep the adapter pairable
+  sudo ./scripts/setup-linux.sh --no-autostart  # no boot-time service
   ./scripts/setup-linux.sh --dry-run            # show planned changes only
 EOF
 }
@@ -82,6 +88,8 @@ while [ $# -gt 0 ]; do
         --no-bluetooth)          DO_BLUETOOTH=0 ;;
         --no-sdp-tools)          DO_SDP_TOOLS=0 ;;
         --discoverable)          DO_DISCOVERABLE=1 ;;
+        --autostart)             DO_AUTOSTART=1 ;;
+        --no-autostart)          DO_AUTOSTART=0 ;;
         --no-discoverable)       DO_DISCOVERABLE=0 ;;
         --no-restart-bluetooth)  RESTART_BLUETOOTH=never ;;
         --restart-bluetooth)     RESTART_BLUETOOTH=always ;;
@@ -641,7 +649,100 @@ EOF
 fi
 
 # --------------------------------------------------------------------------
-# 6. Record what was installed (used by check/uninstall)
+# 6. Autostart: run the server unprivileged at boot
+# --------------------------------------------------------------------------
+AUTOSTART_INSTALLED=0
+SERVICE_UNIT_PATH="${RG_SYSTEMD_UNIT_DIR}/${RG_SERVICE_UNIT}"
+rg_section "Automatic startup"
+
+if [ "$DO_AUTOSTART" = "0" ]; then
+    rg_info "Skipped (--no-autostart). Start the server yourself with ./scripts/run-server-linux.sh."
+    if [ -f "$SERVICE_UNIT_PATH" ]; then
+        note_warn "${RG_SERVICE_UNIT} from an earlier run is still installed. Remove it with: sudo ./scripts/uninstall-linux.sh"
+    fi
+elif ! rg_have systemctl; then
+    note_warn "systemctl not found; cannot install ${RG_SERVICE_UNIT}. Start the server with ./scripts/run-server-linux.sh."
+elif [ "$TARGET_USER" = "root" ]; then
+    note_warn "Target user is root; refusing to install a service that would run the server as root."
+    rg_info "Re-run with --user <your-account> to enable autostart."
+else
+    SERVER_DLL="$(rg_server_dll)"
+    DOTNET_BIN="$(rg_dotnet_for_user "$TARGET_USER" 2>/dev/null || true)"
+
+    # Only reference groups that exist: systemd refuses to start a unit whose
+    # SupplementaryGroups= cannot be resolved.
+    SUPPLEMENTARY=''
+    for candidate in "$RG_GROUP" input; do
+        if rg_group_exists "$candidate"; then
+            case " $SUPPLEMENTARY " in *" $candidate "*) continue ;; esac
+            SUPPLEMENTARY="${SUPPLEMENTARY}${SUPPLEMENTARY:+ }${candidate}"
+        elif [ "$candidate" = "input" ]; then
+            rg_dim "   No 'input' group on this system; leaving it out of the unit."
+        fi
+    done
+    [ -n "$SUPPLEMENTARY" ] || SUPPLEMENTARY="$RG_GROUP"
+
+    rg_field "Service user" "$TARGET_USER" ok
+    rg_field "Supplementary groups" "$SUPPLEMENTARY"
+    rg_field "Working directory" "$RG_SERVER_DIR"
+    rg_field "Release assembly" "$SERVER_DLL" "$([ -f "$SERVER_DLL" ] && echo ok || echo warn)"
+
+    if [ -z "$DOTNET_BIN" ]; then
+        note_warn "No dotnet host found; ${RG_SERVICE_UNIT} is not installed. Install the .NET ${RG_REQUIRED_DOTNET_MAJOR} SDK and re-run this script."
+    else
+        rg_field "dotnet host" "$DOTNET_BIN" ok
+        SERVICE_TEMPLATE="${RG_REPO_ROOT}/systemd/${RG_SERVICE_UNIT}"
+        if [ ! -r "$SERVICE_TEMPLATE" ]; then
+            note_warn "Service template ${SERVICE_TEMPLATE} is missing; skipping autostart."
+        else
+            rendered="$(cat "$SERVICE_TEMPLATE")"
+            rendered="${rendered//@RG_USER@/$TARGET_USER}"
+            rendered="${rendered//@RG_SUPPLEMENTARY_GROUPS@/$SUPPLEMENTARY}"
+            rendered="${rendered//@RG_SERVER_DIR@/$RG_SERVER_DIR}"
+            rendered="${rendered//@RG_SERVER_DLL@/$SERVER_DLL}"
+            rendered="${rendered//@RG_DOTNET@/$DOTNET_BIN}"
+            # Replace the template's explanatory header with a generated one.
+            # Deliberately timestamp-free so re-running setup is a no-op.
+            template_header='# Template. scripts/setup-linux.sh substitutes the placeholders below with the
+# user, repository path and dotnet host it detects on this machine, then installs
+# the result as /etc/systemd/system/remote-gamepad.service. Do not install this
+# file directly; run the setup script instead.'
+            generated_header="# Generated by scripts/setup-linux.sh from the RemoteGamepad repository at
+# ${RG_REPO_ROOT}
+# Re-run that script after moving the repository or changing the service user.
+# Keep local tweaks in a drop-in instead: sudo systemctl edit ${RG_SERVICE_UNIT}"
+            rendered="${rendered//"$template_header"/$generated_header}"
+            service_changes_before="$RG_CHANGES"
+            printf '%s\n' "$rendered" | rg_install_file "$SERVICE_UNIT_PATH" 0644
+            AUTOSTART_INSTALLED=1
+
+            rg_daemon_reload
+            if rg_systemd_running; then
+                rg_run systemctl enable "$RG_SERVICE_UNIT" ||
+                    note_warn "Could not enable ${RG_SERVICE_UNIT}; the server will not start at boot."
+                if [ ! -f "$SERVER_DLL" ] && ! rg_dry_run; then
+                    rg_info "Not started yet: the Release build does not exist."
+                    rg_info "Build it, then start the service:"
+                    rg_info "  ./scripts/build-server-linux.sh && sudo systemctl start ${RG_SERVICE_UNIT}"
+                elif [ "$RG_CHANGES" -ne "$service_changes_before" ] || ! rg_unit_active "$RG_SERVICE_UNIT"; then
+                    if rg_run systemctl restart "$RG_SERVICE_UNIT"; then
+                        rg_done "${RG_SERVICE_UNIT} started and enabled at boot."
+                    else
+                        note_warn "Could not start ${RG_SERVICE_UNIT}; see: systemctl status ${RG_SERVICE_UNIT}"
+                    fi
+                else
+                    rg_ok "${RG_SERVICE_UNIT} is already running with this configuration."
+                fi
+            else
+                rg_dim "   systemd is not running; the service takes effect on the next boot."
+            fi
+            rg_info "Manage it with: systemctl status ${RG_SERVICE_UNIT} | sudo systemctl restart ${RG_SERVICE_UNIT} | journalctl -u remote-gamepad -f"
+        fi
+    fi
+fi
+
+# --------------------------------------------------------------------------
+# 7. Record what was installed (used by check/uninstall)
 # --------------------------------------------------------------------------
 rg_install_file "$RG_STATE_FILE" 0644 <<EOF
 # ${RG_PROJECT_NAME} Linux setup state — written by scripts/setup-linux.sh.
@@ -654,11 +755,12 @@ REMOTE_GAMEPAD_BLUETOOTHD=${BLUETOOTHD:-}
 REMOTE_GAMEPAD_BT_DROPIN=$([ -f "$RG_BT_DROPIN" ] && echo yes || echo no)
 REMOTE_GAMEPAD_SDP_WATCHER=$([ "$SDP_CONFIGURED" = "1" ] && echo yes || echo no)
 REMOTE_GAMEPAD_DISCOVERABLE_UNIT=$([ -f "${RG_SYSTEMD_UNIT_DIR}/${RG_DISCOVERABLE_UNIT}" ] && echo yes || echo no)
+REMOTE_GAMEPAD_AUTOSTART=$([ "$AUTOSTART_INSTALLED" = "1" ] && echo yes || echo no)
 REMOTE_GAMEPAD_SETUP_VERSION=1
 EOF
 
 # --------------------------------------------------------------------------
-# 7. Summary
+# 8. Summary
 # --------------------------------------------------------------------------
 rg_section "Summary"
 rg_info "Configured for user '${TARGET_USER}' on ${RG_OS_NAME} (${FAMILY} family, ${ARCH})."
@@ -675,6 +777,7 @@ if [ -f "${RG_SYSTEMD_UNIT_DIR}/${RG_DISCOVERABLE_UNIT}" ]; then
     rg_info "  ${RG_DISCOVERABLE_HELPER}"
     rg_info "  ${RG_SYSTEMD_UNIT_DIR}/${RG_DISCOVERABLE_UNIT}"
 fi
+if [ "$AUTOSTART_INSTALLED" = "1" ]; then rg_info "  ${SERVICE_UNIT_PATH}"; fi
 rg_info "  ${RG_STATE_FILE}"
 
 if [ "$RELOGIN_REQUIRED" = "1" ]; then
@@ -688,7 +791,12 @@ rg_info "Next steps:"
 rg_info "  ./scripts/check-linux.sh          # verify the environment"
 rg_info "  ./scripts/build-server-linux.sh   # restore + Release build"
 rg_info "  ./scripts/test-linux.sh           # regression tests + uinput self-test"
-rg_info "  ./scripts/run-server-linux.sh     # run as your normal user, never sudo"
+if [ "$AUTOSTART_INSTALLED" = "1" ]; then
+    rg_info "  sudo systemctl start ${RG_SERVICE_UNIT}   # after the first build (then it starts at boot)"
+    rg_info "  journalctl -u remote-gamepad -f   # live server log"
+else
+    rg_info "  ./scripts/run-server-linux.sh     # run as your normal user, never sudo"
+fi
 
 if [ "$WARNINGS" -gt 0 ]; then
     echo

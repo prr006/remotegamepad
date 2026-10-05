@@ -57,7 +57,7 @@ RemoteGamepad/
 │   ├── remote-gamepad-set-discoverable  # optional adapter visibility helper
 │   ├── lib/remote-gamepad-linux.sh
 │   └── tests/linux-scripts-test.sh
-├── systemd/                       # /run/sdp watcher + optional discoverable unit
+├── systemd/                       # autostart service, /run/sdp watcher, optional discoverable unit
 ├── docs/
 │   └── Linux.md                   # Linux setup, build, test, run, troubleshooting
 └── README.md
@@ -114,14 +114,22 @@ optionally, **Bluetooth Classic RFCOMM/SPP**. It always runs as your normal
 user — never with `sudo`.
 
 ```bash
-sudo ./scripts/setup-linux.sh     # one-time setup (groups, udev, uinput, BlueZ)
+sudo ./scripts/setup-linux.sh     # one-time setup (groups, udev, uinput, BlueZ, autostart)
 # log out and back in, then:
 ./scripts/check-linux.sh          # environment report
 ./scripts/build-server-linux.sh   # restore + Release build
 ./scripts/test-linux.sh           # regression tests + uinput self-test
-./scripts/run-server-linux.sh     # run the server
+sudo systemctl start remote-gamepad   # start now — it already starts at boot
+journalctl -u remote-gamepad -f       # live server log
 sudo ./scripts/uninstall-linux.sh # remove only RemoteGamepad's configuration
 ```
+
+**Starts automatically.** Setup installs `remote-gamepad.service`, which runs
+the compiled Release build as your normal user (never root) on every boot and
+restarts it on failure. Manage it with `systemctl status|restart|stop
+remote-gamepad`, follow it with `journalctl -u remote-gamepad -f`, or opt out
+entirely with `sudo ./scripts/setup-linux.sh --no-autostart` and run
+`./scripts/run-server-linux.sh` by hand.
 
 Supported distribution families: **Fedora/RHEL (`dnf`), Debian/Ubuntu (`apt`),
 Arch (`pacman`), openSUSE (`zypper`)** and any other systemd distribution

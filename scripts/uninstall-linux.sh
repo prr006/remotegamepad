@@ -3,6 +3,7 @@
 # RemoteGamepad — remove the Linux system configuration
 #
 # Removes ONLY what scripts/setup-linux.sh created:
+#   * /etc/systemd/system/remote-gamepad.service (stopped and disabled first)
 #   * /etc/udev/rules.d/99-remote-gamepad-uinput.rules
 #   * /etc/modules-load.d/remote-gamepad-uinput.conf
 #   * /etc/systemd/system/bluetooth.service.d/10-remote-gamepad-compat.conf
@@ -96,10 +97,14 @@ rg_info "Group in use: ${RG_GROUP}"
 BT_DROPIN_REMOVED=0
 
 # --------------------------------------------------------------------------
-# 1. systemd units (SDP watcher and the optional discoverability unit)
+# 1. systemd units (autostart service, SDP watcher, discoverability unit)
 # --------------------------------------------------------------------------
 if rg_have systemctl; then
     if rg_systemd_running; then
+        if [ -f "${RG_SYSTEMD_UNIT_DIR}/${RG_SERVICE_UNIT}" ]; then
+            rg_step "Stopping and disabling ${RG_SERVICE_UNIT}"
+            rg_run_quiet systemctl disable --now "$RG_SERVICE_UNIT" || true
+        fi
         rg_run_quiet systemctl disable --now "$RG_SDP_PATH_UNIT" || true
         rg_run_quiet systemctl stop "$RG_SDP_SERVICE_UNIT" || true
         if [ -f "${RG_SYSTEMD_UNIT_DIR}/${RG_DISCOVERABLE_UNIT}" ]; then
@@ -107,6 +112,7 @@ if rg_have systemctl; then
         fi
     fi
 fi
+rg_remove_file "${RG_SYSTEMD_UNIT_DIR}/${RG_SERVICE_UNIT}"
 rg_remove_file "${RG_SYSTEMD_UNIT_DIR}/${RG_SDP_PATH_UNIT}"
 rg_remove_file "${RG_SYSTEMD_UNIT_DIR}/${RG_SDP_SERVICE_UNIT}"
 rg_remove_file "${RG_SYSTEMD_UNIT_DIR}/${RG_DISCOVERABLE_UNIT}"
@@ -114,6 +120,7 @@ rg_remove_file "${RG_SYSTEMD_UNIT_DIR}/${RG_DISCOVERABLE_UNIT}"
 rg_remove_file "${RG_SYSTEMD_UNIT_DIR}/bluetooth.service.wants/${RG_SDP_PATH_UNIT}"
 rg_remove_file "${RG_SYSTEMD_UNIT_DIR}/multi-user.target.wants/${RG_SDP_PATH_UNIT}"
 rg_remove_file "${RG_SYSTEMD_UNIT_DIR}/bluetooth.service.wants/${RG_DISCOVERABLE_UNIT}"
+rg_remove_file "${RG_SYSTEMD_UNIT_DIR}/multi-user.target.wants/${RG_SERVICE_UNIT}"
 
 # --------------------------------------------------------------------------
 # 2. Bluetooth compatibility drop-in (vendor unit was never modified)

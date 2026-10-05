@@ -140,7 +140,26 @@ EOS
     cat > "$dir/bin/systemctl" <<EOS
 #!/bin/sh
 log="${dir}/log/systemctl.log"
+state="${dir}/log/units"
+mkdir -p "\$state"
 echo "systemctl \$*" >> "\$log"
+# Remember start/stop/enable/disable per unit so is-active / is-enabled can
+# answer truthfully for units this test run manages.
+verb="\$1"
+for a in "\$@"; do
+  case "\$a" in
+    *.service|*.path|*.socket|*.target)
+      safe=\$(printf '%s' "\$a" | tr -c 'a-zA-Z0-9._-' '_')
+      case "\$verb" in
+        start|restart|reload-or-restart) : > "\$state/\$safe.active" ;;
+        stop) rm -f "\$state/\$safe.active" ;;
+        enable) : > "\$state/\$safe.enabled"
+                case " \$* " in *" --now "*) : > "\$state/\$safe.active" ;; esac ;;
+        disable) rm -f "\$state/\$safe.enabled"
+                 case " \$* " in *" --now "*) rm -f "\$state/\$safe.active" ;; esac ;;
+      esac ;;
+  esac
+done
 case "\$1" in
   --version) echo "systemd 256 (256.4)"; exit 0 ;;
   show)
@@ -159,11 +178,48 @@ case "\$1" in
         fi
         exit 0 ;;
       ExecMainStatus) echo 0; exit 0 ;;
+      MainPID) echo 4242; exit 0 ;;
+      ActiveState)
+        safe=\$(printf '%s' "\$unit" | tr -c 'a-zA-Z0-9._-' '_')
+        if [ -f "\$state/\$safe.active" ]; then echo active; else echo inactive; fi; exit 0 ;;
+      SubState)
+        safe=\$(printf '%s' "\$unit" | tr -c 'a-zA-Z0-9._-' '_')
+        if [ -f "\$state/\$safe.active" ]; then echo running; else echo dead; fi; exit 0 ;;
+      Result) echo success; exit 0 ;;
+      ConditionResult) echo yes; exit 0 ;;
+      NRestarts) echo 0; exit 0 ;;
       *) exit 0 ;;
     esac ;;
-  is-active) [ "${active}" = active ] && exit 0 || exit 3 ;;
-  is-enabled) exit 0 ;;
-  list-unit-files) echo "bluetooth.service enabled"; exit 0 ;;
+  is-active)
+    for a in "\$@"; do
+      case "\$a" in
+        *.service|*.path|*.socket|*.target)
+          safe=\$(printf '%s' "\$a" | tr -c 'a-zA-Z0-9._-' '_')
+          [ -f "\$state/\$safe.active" ] && exit 0
+          case "\$a" in remote-gamepad.service) exit 3 ;; esac ;;
+      esac
+    done
+    [ "${active}" = active ] && exit 0 || exit 3 ;;
+  is-enabled)
+    for a in "\$@"; do
+      case "\$a" in
+        remote-gamepad.service)
+          safe=\$(printf '%s' "\$a" | tr -c 'a-zA-Z0-9._-' '_')
+          [ -f "\$state/\$safe.enabled" ] && exit 0 || exit 1 ;;
+      esac
+    done
+    exit 0 ;;
+  list-unit-files)
+    for a in "\$@"; do
+      case "\$a" in
+        remote-gamepad.service)
+          if [ -f "${dir}/root/etc/systemd/system/remote-gamepad.service" ]; then
+            echo "remote-gamepad.service enabled"; exit 0
+          fi
+          exit 0 ;;
+      esac
+    done
+    echo "bluetooth.service enabled"; exit 0 ;;
   *) exit 0 ;;
 esac
 EOS
@@ -307,6 +363,13 @@ assert_eq "--discoverable on a Wi-Fi-only box still exits 0" 0 $?
 assert_contains "explains the ignored flag" "$LOG" "--discoverable was ignored"
 assert_not_contains "no discoverable unit without BlueZ" "$LOG" "remote-gamepad-discoverable.service"
 
+run_scenario "$DIR" "$LOG" "${SCRIPTS}/setup-linux.sh" --dry-run --yes --no-install
+assert_eq "dry-run plans the autostart service" 0 $?
+assert_contains "dry-run writes the service unit"  "$LOG" "/etc/systemd/system/remote-gamepad.service"
+assert_contains "dry-run enables the service"      "$LOG" "systemctl enable remote-gamepad.service"
+assert_contains "dry-run shows the service user"   "$LOG" "Service user"
+assert_not_contains "dry-run never runs the server as root" "$LOG" "Service user         : root"
+
 # ==========================================================================
 head1 "Scenario: Arch Linux with adapter"
 DIR="$(make_scenario arch id=arch pretty='Arch Linux' version='' pkgmgr=pacman \
@@ -431,8 +494,9 @@ PATHUNIT="${PREFIX}/etc/systemd/system/remote-gamepad-sdp-permissions.path"
 SVCUNIT="${PREFIX}/etc/systemd/system/remote-gamepad-sdp-permissions.service"
 HELPER_INSTALLED="${PREFIX}/usr/local/libexec/remote-gamepad-fix-sdp-permissions"
 STATE="${PREFIX}/etc/remote-gamepad/setup.env"
+AUTOUNIT="${PREFIX}/etc/systemd/system/remote-gamepad.service"
 
-for f in "$UDEV" "$MODCONF" "$DROPIN" "$PATHUNIT" "$SVCUNIT" "$HELPER_INSTALLED" "$STATE"; do
+for f in "$UDEV" "$MODCONF" "$DROPIN" "$PATHUNIT" "$SVCUNIT" "$HELPER_INSTALLED" "$STATE" "$AUTOUNIT"; do
     if [ -f "$f" ]; then ok "created ${f#"$PREFIX"}"; else bad "created ${f#"$PREFIX"}"; fi
 done
 assert_contains "udev rule grants the dedicated group" "$UDEV" 'GROUP="remote-gamepad"'
@@ -455,6 +519,44 @@ if [ -e "$DISC_UNIT" ] || [ -e "$DISC_HELPER" ]; then
 else ok "discoverability stays opt-in without --discoverable"; fi
 assert_contains "setup explains the optional flag" "$LOG" "--discoverable"
 
+# ---- autostart service (Phase 3) ----
+ME="$(id -un)"
+assert_contains "service runs as the detected user"   "$AUTOUNIT" "User=${ME}"
+if grep -q '^User=root$' "$AUTOUNIT"; then bad "service never runs as root"; else ok "service never runs as root"; fi
+assert_contains "service keeps the dedicated group"   "$AUTOUNIT" "SupplementaryGroups="
+assert_matches  "service group list includes remote-gamepad" "$AUTOUNIT" "^SupplementaryGroups=.*remote-gamepad"
+assert_contains "service runs the Release assembly"   "$AUTOUNIT" "bin/Release/net10.0/RemoteGamepadServer.dll"
+assert_contains "service uses the detected dotnet"    "$AUTOUNIT" "ExecStart=${DIR}/bin/dotnet "
+assert_not_contains "service never uses dotnet run"   "$AUTOUNIT" "dotnet run"
+assert_contains "service working dir is the project"  "$AUTOUNIT" "WorkingDirectory=${REPO_ROOT}/Server/RemoteGamepadServer"
+assert_contains "service restarts on failure"         "$AUTOUNIT" "Restart=on-failure"
+assert_contains "service starts at boot"              "$AUTOUNIT" "WantedBy=multi-user.target"
+assert_not_contains "no placeholder survives rendering" "$AUTOUNIT" "@RG_"
+assert_eq "service unit mode" "644" "$(stat -c '%a' "$AUTOUNIT")"
+assert_contains "setup enables the service"   "${DIR}/log/systemctl.log" "enable remote-gamepad.service"
+assert_contains "setup explains the missing build" "$LOG" "Release build does not exist"
+assert_contains "state file records autostart" "$STATE" "REMOTE_GAMEPAD_AUTOSTART=yes"
+
+# check-linux.sh must report the installed service.
+LOGC="${WORK}/e2e-check-autostart.log"
+run_e2e "$LOGC" "${SCRIPTS}/check-linux.sh" || true
+assert_contains "check reports the autostart section" "$LOGC" "Automatic startup"
+assert_contains "check reports the service user"      "$LOGC" "Runs as"
+assert_contains "check reports boot enablement"       "$LOGC" "Starts at boot"
+assert_contains "check reports the ExecStart"         "$LOGC" "RemoteGamepadServer.dll"
+assert_contains "check prints management commands"    "$LOGC" "journalctl -u remote-gamepad -f"
+
+# run-server-linux.sh must refuse to double-bind the UDP ports while the
+# service owns them (simulate an already-running unit).
+mkdir -p "${DIR}/log/units"
+: > "${DIR}/log/units/remote-gamepad.service.active"
+LOGR="${WORK}/e2e-runserver-conflict.log"
+run_e2e "$LOGR" "${SCRIPTS}/run-server-linux.sh"
+assert_eq "run-server refuses while the service runs" 1 $?
+assert_contains "run-server explains the conflict" "$LOGR" "already running this server in the background"
+assert_contains "run-server offers the stop command" "$LOGR" "systemctl stop remote-gamepad.service"
+rm -f "${DIR}/log/units/remote-gamepad.service.active"
+
 BT_LOG="${DIR}/log/systemctl.log"
 RESTARTS1="$(grep -c 'restart bluetooth.service' "$BT_LOG" 2>/dev/null || true)"
 if [ "${RESTARTS1:-0}" -ge 1 ]; then ok "first run applies compat mode (bluetooth restarted)"; else
@@ -467,9 +569,10 @@ assert_eq "re-run exits 0" 0 $?
 assert_contains "re-run reports unchanged files" "$LOG2" "unchanged:"
 assert_not_contains "re-run rewrites nothing"    "$LOG2" "wrote ${PREFIX}"
 UNCHANGED_COUNT="$(grep -c 'unchanged:' "$LOG2")"
-if [ "$UNCHANGED_COUNT" -ge 7 ]; then ok "re-run leaves all 7 managed files untouched"; else
-    bad "re-run leaves all 7 managed files untouched (only ${UNCHANGED_COUNT})"
+if [ "$UNCHANGED_COUNT" -ge 8 ]; then ok "re-run leaves all 8 managed files untouched"; else
+    bad "re-run leaves all 8 managed files untouched (only ${UNCHANGED_COUNT})"
 fi
+assert_contains "re-run keeps the autostart unit in place" "$LOG2" "unchanged: ${PREFIX}/etc/systemd/system/remote-gamepad.service"
 
 RESTARTS2="$(grep -c 'restart bluetooth.service' "$BT_LOG" 2>/dev/null || true)"
 assert_eq "re-run does not restart bluetooth again" "$RESTARTS1" "$RESTARTS2"
@@ -477,9 +580,10 @@ assert_eq "re-run does not restart bluetooth again" "$RESTARTS1" "$RESTARTS2"
 LOG3="${WORK}/e2e-uninstall.log"
 run_e2e "$LOG3" "${SCRIPTS}/uninstall-linux.sh" --yes
 assert_eq "uninstall exits 0" 0 $?
-for f in "$UDEV" "$MODCONF" "$DROPIN" "$PATHUNIT" "$SVCUNIT" "$HELPER_INSTALLED" "$STATE"; do
+for f in "$UDEV" "$MODCONF" "$DROPIN" "$PATHUNIT" "$SVCUNIT" "$HELPER_INSTALLED" "$STATE" "$AUTOUNIT"; do
     if [ -e "$f" ]; then bad "removed ${f#"$PREFIX"}"; else ok "removed ${f#"$PREFIX"}"; fi
 done
+assert_contains "uninstall disables the autostart service" "${DIR}/log/systemctl.log" "disable --now remote-gamepad.service"
 if [ -f "${PREFIX}/etc/udev/rules.d/10-unrelated.rules" ]; then ok "unrelated udev rule preserved"; else bad "unrelated udev rule preserved"; fi
 if [ -f "${PREFIX}/etc/systemd/system/unrelated.service" ]; then ok "unrelated unit preserved"; else bad "unrelated unit preserved"; fi
 if [ -d "${PREFIX}/etc/systemd/system/bluetooth.service.d" ]; then bad "empty drop-in dir removed"; else ok "empty drop-in dir removed"; fi
@@ -546,6 +650,61 @@ assert_eq "uninstall after --discoverable exits 0" 0 $?
 if [ -e "$DISC_UNIT" ]; then bad "discoverable unit removed"; else ok "discoverable unit removed"; fi
 if [ -e "$DISC_HELPER" ]; then bad "discoverable helper removed"; else ok "discoverable helper removed"; fi
 assert_contains "discoverable unit disabled on uninstall" "${DIR}/log/systemctl.log" "disable --now remote-gamepad-discoverable.service"
+
+# ==========================================================================
+head1 "End-to-end: --no-autostart opts out of the boot service"
+DIR="$(make_scenario e2e-noauto id=ubuntu id_like=debian pretty='Ubuntu 24.04 LTS' version=24.04 \
+        pkgmgr=apt bluetoothd=none adapter=0)"
+PREFIX="${DIR}/root"
+LOG9="${WORK}/e2e-no-autostart.log"
+run_e2e "$LOG9" "${SCRIPTS}/setup-linux.sh" --yes --no-install --no-autostart
+assert_eq "--no-autostart setup exits 0" 0 $?
+assert_contains "setup reports the opt-out" "$LOG9" "Skipped (--no-autostart)"
+assert_contains "setup still explains manual start" "$LOG9" "run-server-linux.sh"
+NOAUTO_UNIT="${PREFIX}/etc/systemd/system/remote-gamepad.service"
+if [ -e "$NOAUTO_UNIT" ]; then bad "--no-autostart installs no service unit"; else ok "--no-autostart installs no service unit"; fi
+assert_not_contains "--no-autostart never enables a service" "${DIR}/log/systemctl.log" "enable remote-gamepad.service"
+assert_contains "state file records the opt-out" "${PREFIX}/etc/remote-gamepad/setup.env" "REMOTE_GAMEPAD_AUTOSTART=no"
+# Wi-Fi-only machine: the rest of the setup must be unaffected.
+if [ -f "${PREFIX}/etc/udev/rules.d/99-remote-gamepad-uinput.rules" ]; then ok "--no-autostart keeps uinput setup"; else bad "--no-autostart keeps uinput setup"; fi
+run_e2e "${WORK}/e2e-noauto-cleanup.log" "${SCRIPTS}/uninstall-linux.sh" --yes --remove-group
+
+# ==========================================================================
+head1 "End-to-end: the service is started once a Release build exists"
+# rg_server_dll() looks at the real repository, so stage a placeholder build
+# (bin/ is git-ignored) and remove it again afterwards.
+FAKE_BUILD_DIR="${REPO_ROOT}/Server/RemoteGamepadServer/bin/Release/net10.0"
+FAKE_DLL="${FAKE_BUILD_DIR}/RemoteGamepadServer.dll"
+if [ -e "$FAKE_DLL" ]; then
+    say "  (skipped: a real build already exists at ${FAKE_DLL})"
+else
+    mkdir -p "$FAKE_BUILD_DIR"
+    : > "$FAKE_DLL"
+    DIR="$(make_scenario e2e-start id=fedora pretty='Fedora Linux 43' version=43 pkgmgr=dnf \
+            bluetoothd=/usr/libexec/bluetooth/bluetoothd compat=1 adapter=1)"
+    PREFIX="${DIR}/root"
+    LOG10="${WORK}/e2e-autostart-start.log"
+    run_e2e "$LOG10" "${SCRIPTS}/setup-linux.sh" --yes --no-install
+    assert_eq "setup with a build present exits 0" 0 $?
+    assert_contains "service is started after setup" "${DIR}/log/systemctl.log" "restart remote-gamepad.service"
+    assert_contains "setup confirms the service is running" "$LOG10" "started and enabled at boot"
+    assert_not_contains "no build hint when the build exists" "$LOG10" "Release build does not exist"
+    assert_contains "unit condition points at the build" "${PREFIX}/etc/systemd/system/remote-gamepad.service" "ConditionPathExists=${FAKE_DLL}"
+    # A second run must not restart a healthy service.
+    RESTARTS_A="$(grep -c 'restart remote-gamepad.service' "${DIR}/log/systemctl.log")"
+    run_e2e "${WORK}/e2e-autostart-rerun.log" "${SCRIPTS}/setup-linux.sh" --yes --no-install
+    RESTARTS_B="$(grep -c 'restart remote-gamepad.service' "${DIR}/log/systemctl.log")"
+    assert_eq "re-run does not restart a healthy service" "$RESTARTS_A" "$RESTARTS_B"
+    assert_contains "re-run reports the running service" "${WORK}/e2e-autostart-rerun.log" "already running with this configuration"
+    # build-server-linux.sh advertises the restart once the unit exists.
+    rm -rf "${REPO_ROOT}/Server/RemoteGamepadServer/bin/Release/net10.0"
+    rmdir "${REPO_ROOT}/Server/RemoteGamepadServer/bin/Release" 2>/dev/null || true
+    rmdir "${REPO_ROOT}/Server/RemoteGamepadServer/bin" 2>/dev/null || true
+    run_e2e "${WORK}/e2e-start-cleanup.log" "${SCRIPTS}/uninstall-linux.sh" --yes --remove-group
+    if [ -e "${PREFIX}/etc/systemd/system/remote-gamepad.service" ]; then
+        bad "uninstall removes the started service"
+    else ok "uninstall removes the started service"; fi
+fi
 
 # ==========================================================================
 head1 "Library unit tests"
@@ -748,6 +907,27 @@ assert_contains "discoverable unit follows bluetooth" "$DISC_UNIT_SRC" "PartOf=b
 assert_contains "discoverable unit installs into bluetooth.service" "$DISC_UNIT_SRC" "WantedBy=bluetooth.service"
 assert_contains "discoverable unit tolerates a BlueZ refusal" "$DISC_UNIT_SRC" "SuccessExitStatus=0 1"
 assert_contains "discoverable unit skips machines without an adapter" "$DISC_UNIT_SRC" "ConditionPathExistsGlob=/sys/class/bluetooth/hci*"
+
+# ---- autostart service template ----
+AUTO_UNIT_SRC="${REPO_ROOT}/systemd/remote-gamepad.service"
+assert_contains "service template parameterises the user"    "$AUTO_UNIT_SRC" "User=@RG_USER@"
+assert_contains "service template parameterises the groups"  "$AUTO_UNIT_SRC" "SupplementaryGroups=@RG_SUPPLEMENTARY_GROUPS@"
+assert_contains "service template parameterises ExecStart"   "$AUTO_UNIT_SRC" "ExecStart=@RG_DOTNET@ @RG_SERVER_DLL@"
+assert_contains "service template parameterises the workdir" "$AUTO_UNIT_SRC" "WorkingDirectory=@RG_SERVER_DIR@"
+assert_contains "service template restarts on failure"       "$AUTO_UNIT_SRC" "Restart=on-failure"
+assert_contains "service template starts at boot"            "$AUTO_UNIT_SRC" "WantedBy=multi-user.target"
+assert_contains "service template waits for bluetooth"       "$AUTO_UNIT_SRC" "Wants=bluetooth.service"
+assert_contains "service template waits for the SDP watcher" "$AUTO_UNIT_SRC" "Wants=remote-gamepad-sdp-permissions.path"
+assert_contains "service template orders after bluetooth"    "$AUTO_UNIT_SRC" "After=network-online.target bluetooth.service remote-gamepad-sdp-permissions.path"
+assert_contains "service template skips without a build"     "$AUTO_UNIT_SRC" "ConditionPathExists=@RG_SERVER_DLL@"
+assert_contains "service template stops with SIGINT"         "$AUTO_UNIT_SRC" "KillSignal=SIGINT"
+assert_not_contains "service template never requires BlueZ"  "$AUTO_UNIT_SRC" "Requires=bluetooth.service"
+assert_not_contains "service template never binds to BlueZ"  "$AUTO_UNIT_SRC" "BindsTo="
+assert_not_contains "service template never hides /dev"      "$AUTO_UNIT_SRC" "PrivateDevices=yes"
+assert_not_contains "service template never hides /home"     "$AUTO_UNIT_SRC" "ProtectHome=yes"
+assert_not_contains "service template never uses the SDK"    "$AUTO_UNIT_SRC" "dotnet run"
+if grep -q '^User=root' "$AUTO_UNIT_SRC"; then bad "service template never hard-codes root"; else ok "service template never hard-codes root"; fi
+if grep -q '/home/rahulp' "$AUTO_UNIT_SRC"; then bad "service template hard-codes no personal path"; else ok "service template hard-codes no personal path"; fi
 
 # ==========================================================================
 printf '\n\033[1mResult:\033[0m %d passed, %d failed\n' "$PASS" "$FAIL"
