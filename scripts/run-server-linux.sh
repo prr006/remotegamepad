@@ -23,6 +23,8 @@ Usage: $0 [server arguments]
 
 Server arguments are passed straight through, for example:
   --trace-input        rate-limited state-to-event-code diagnostics
+  --no-discoverable    do not ask BlueZ to make the adapter visible
+                       (RFCOMM/SDP are unaffected; use it for a paired phone)
   --uinput-self-test   backend-only mapping exercise (see scripts/test-linux.sh)
 
 Listens on UDP ${RG_UDP_INPUT_PORT} (input) and UDP ${RG_UDP_DISCOVERY_PORT} (discovery),

@@ -210,6 +210,19 @@ EOS
     for stub in modprobe udevadm groupadd usermod ldconfig; do
         printf '#!/bin/sh\nexit 0\n' > "$dir/bin/$stub"
     done
+    # D-Bus stub for the optional discoverability helper: records every call and
+    # answers the Adapter1 properties, so nothing reaches the real system bus.
+    cat > "$dir/bin/busctl" <<EOS
+#!/bin/sh
+echo "busctl \$*" >> "${dir}/log/busctl.log"
+case "\$*" in
+  *get-property*DiscoverableTimeout*) echo "u 180" ;;
+  *get-property*Discoverable*) echo "b false" ;;
+  *get-property*Powered*) echo "b true" ;;
+  *get-property*Pairable*) echo "b true" ;;
+esac
+exit 0
+EOS
     # Optional tools: only present when the scenario asks for them, so package
     # planning can be observed when they are missing.
     for stub in $tools; do
@@ -288,6 +301,12 @@ assert_contains "honours --no-bluetooth"  "$LOG" "Skipped (--no-bluetooth was gi
 assert_contains "honours --no-install"    "$LOG" "Package installation disabled"
 assert_not_contains "no package install"  "$LOG" "apt-get install"
 
+LOG="${WORK}/ubuntu-disc.log"
+run_scenario "$DIR" "$LOG" "${SCRIPTS}/setup-linux.sh" --dry-run --yes --no-install --discoverable
+assert_eq "--discoverable on a Wi-Fi-only box still exits 0" 0 $?
+assert_contains "explains the ignored flag" "$LOG" "--discoverable was ignored"
+assert_not_contains "no discoverable unit without BlueZ" "$LOG" "remote-gamepad-discoverable.service"
+
 # ==========================================================================
 head1 "Scenario: Arch Linux with adapter"
 DIR="$(make_scenario arch id=arch pretty='Arch Linux' version='' pkgmgr=pacman \
@@ -343,6 +362,8 @@ assert_contains "reports uinput"         "$LOG" "uinput"
 assert_contains "reports /run/sdp"       "$LOG" "/run/sdp"
 assert_contains "reports groups"         "$LOG" "Session groups"
 assert_contains "reports SDP registration" "$LOG" "SDP registration"
+assert_contains "reports adapter visibility" "$LOG" "Discoverable"
+assert_contains "explains that hidden is fine" "$LOG" "fine for an already paired phone"
 assert_contains "non-zero exit is explained" "$LOG" "blocking problem"
 assert_eq "exit 1 when group is missing" 1 "$CHECK_STATUS"
 
@@ -426,6 +447,13 @@ assert_contains "state file records the daemon"        "$STATE" "REMOTE_GAMEPAD_
 assert_eq "helper is installed executable" "755" "$(stat -c '%a' "$HELPER_INSTALLED")"
 assert_eq "helper matches the repository copy" "" "$(diff "${SCRIPTS}/remote-gamepad-fix-sdp-permissions" "$HELPER_INSTALLED" 2>&1)"
 assert_eq "udev rule mode" "644" "$(stat -c '%a' "$UDEV")"
+# The optional discoverability unit must stay opt-in.
+DISC_UNIT="${PREFIX}/etc/systemd/system/remote-gamepad-discoverable.service"
+DISC_HELPER="${PREFIX}/usr/local/libexec/remote-gamepad-set-discoverable"
+if [ -e "$DISC_UNIT" ] || [ -e "$DISC_HELPER" ]; then
+    bad "discoverability stays opt-in without --discoverable"
+else ok "discoverability stays opt-in without --discoverable"; fi
+assert_contains "setup explains the optional flag" "$LOG" "--discoverable"
 
 BT_LOG="${DIR}/log/systemctl.log"
 RESTARTS1="$(grep -c 'restart bluetooth.service' "$BT_LOG" 2>/dev/null || true)"
@@ -491,6 +519,34 @@ if [ -f "${PREFIX}/etc/systemd/system/remote-gamepad-sdp-permissions.path" ]; th
 else bad "watcher still installed on vendor-compat distros"; fi
 run_e2e "${WORK}/e2e-compat-cleanup.log" "${SCRIPTS}/uninstall-linux.sh" --yes --remove-group
 
+# Optional discoverability helper: installed only with --discoverable, enabled
+# through systemd, and removed again by uninstall-linux.sh.
+DIR="$(make_scenario e2e-discoverable id=fedora pretty='Fedora Linux 44' version=44 pkgmgr=dnf \
+        bluetoothd=/usr/libexec/bluetooth/bluetoothd compat=0 adapter=1)"
+PREFIX="${DIR}/root"
+LOG7="${WORK}/e2e-discoverable.log"
+run_e2e "$LOG7" "${SCRIPTS}/setup-linux.sh" --yes --no-install --discoverable
+assert_eq "--discoverable setup exits 0" 0 $?
+DISC_UNIT="${PREFIX}/etc/systemd/system/remote-gamepad-discoverable.service"
+DISC_HELPER="${PREFIX}/usr/local/libexec/remote-gamepad-set-discoverable"
+if [ -f "$DISC_UNIT" ]; then ok "discoverable unit installed"; else bad "discoverable unit installed"; fi
+if [ -x "$DISC_HELPER" ]; then ok "discoverable helper installed"; else bad "discoverable helper installed"; fi
+assert_eq "discoverable helper matches the repository copy" "" \
+    "$(diff "${SCRIPTS}/remote-gamepad-set-discoverable" "$DISC_HELPER" 2>&1)"
+assert_contains "discoverable unit is enabled" "${DIR}/log/systemctl.log" "enable remote-gamepad-discoverable.service"
+assert_contains "adapter made discoverable now" "$LOG7" "discoverable and pairable"
+assert_contains "state file records the unit" "${PREFIX}/etc/remote-gamepad/setup.env" "REMOTE_GAMEPAD_DISCOVERABLE_UNIT=yes"
+assert_contains "D-Bus property set through busctl" "${DIR}/log/busctl.log" "set-property org.bluez /org/bluez/hci0 org.bluez.Adapter1 Discoverable b true"
+assert_contains "adapter is powered first" "${DIR}/log/busctl.log" "org.bluez.Adapter1 Powered b true"
+assert_contains "discoverable timeout disabled" "${DIR}/log/busctl.log" "DiscoverableTimeout u 0"
+
+LOG8="${WORK}/e2e-discoverable-uninstall.log"
+run_e2e "$LOG8" "${SCRIPTS}/uninstall-linux.sh" --yes --remove-group
+assert_eq "uninstall after --discoverable exits 0" 0 $?
+if [ -e "$DISC_UNIT" ]; then bad "discoverable unit removed"; else ok "discoverable unit removed"; fi
+if [ -e "$DISC_HELPER" ]; then bad "discoverable helper removed"; else ok "discoverable helper removed"; fi
+assert_contains "discoverable unit disabled on uninstall" "${DIR}/log/systemctl.log" "disable --now remote-gamepad-discoverable.service"
+
 # ==========================================================================
 head1 "Library unit tests"
 # shellcheck source-path=SCRIPTDIR source=../lib/remote-gamepad-linux.sh
@@ -516,6 +572,15 @@ assert_contains "rg_install_file is idempotent" <(printf '%s' "$OUT2") "unchange
 assert_contains "rg_install_file updates on change" <(printf '%s' "$OUT3") "wrote"
 assert_eq "file content updated" "changed" "$(cat "$TARGET")"
 assert_eq "file mode applied" "644" "$(stat -c '%a' "$TARGET")"
+
+# discoverability status parsing (busctl/dbus-send output shapes)
+DISC_STATUS="$(printf 'adapter=hci0\npowered=true\ndiscoverable=false\npairable=true\ndiscoverable_timeout=180\n')"
+assert_eq "parses the adapter field"      "hci0"  "$(rg_discoverable_field adapter "$DISC_STATUS")"
+assert_eq "parses the discoverable field" "false" "$(rg_discoverable_field discoverable "$DISC_STATUS")"
+assert_eq "parses the powered field"      "true"  "$(rg_discoverable_field powered "$DISC_STATUS")"
+if rg_discoverable_field nosuchfield "$DISC_STATUS" >/dev/null 2>&1; then
+    bad "unknown status field fails"
+else ok "unknown status field fails"; fi
 
 # dry-run must not write
 DRY_TARGET="${WORK}/dry-target.conf"
@@ -560,6 +625,109 @@ else
 fi
 
 # ==========================================================================
+head1 "Bluetooth discoverability helper (optional, never fatal)"
+DISC="${SCRIPTS}/remote-gamepad-set-discoverable"
+DISC_DIR="${WORK}/disc"
+mkdir -p "${DISC_DIR}/bin" "${DISC_DIR}/sys/class/bluetooth/hci0" "${DISC_DIR}/log"
+cat > "${DISC_DIR}/bin/busctl" <<EOS
+#!/bin/sh
+echo "busctl \$*" >> "${DISC_DIR}/log/calls.log"
+case "\$*" in
+  *get-property*DiscoverableTimeout*) echo "u 180" ;;
+  *get-property*Discoverable*) echo "b false" ;;
+  *get-property*) echo "b true" ;;
+esac
+exit 0
+EOS
+chmod +x "${DISC_DIR}/bin/busctl"
+
+# 1. Wi-Fi-only machine: no adapter is a successful no-op, not a failure.
+OUT="$(REMOTE_GAMEPAD_SYS_BLUETOOTH="${WORK}/no-bluetooth" "$DISC" on 2>&1)"
+assert_eq "no adapter is a no-op" 0 $?
+assert_contains "no adapter is explained" <(printf '%s' "$OUT") "no Bluetooth adapter present"
+
+# 2. status reports the adapter properties through busctl
+OUT="$(PATH="${DISC_DIR}/bin:${SYSBIN}" REMOTE_GAMEPAD_SYS_BLUETOOTH="${DISC_DIR}/sys/class/bluetooth" "$DISC" status 2>&1)"
+assert_eq "status exits 0" 0 $?
+assert_contains "status reports the adapter" <(printf '%s' "$OUT") "adapter=hci0"
+assert_contains "status reports discoverable" <(printf '%s' "$OUT") "discoverable=false"
+assert_contains "status reports powered" <(printf '%s' "$OUT") "powered=true"
+
+# 3. "on" powers the adapter, clears the timeout and sets Discoverable
+OUT="$(PATH="${DISC_DIR}/bin:${SYSBIN}" REMOTE_GAMEPAD_SYS_BLUETOOTH="${DISC_DIR}/sys/class/bluetooth" "$DISC" on 2>&1)"
+assert_eq "on exits 0" 0 $?
+assert_contains "on reports success" <(printf '%s' "$OUT") "discoverable and pairable"
+assert_contains "Powered is set first" "${DISC_DIR}/log/calls.log" "Adapter1 Powered b true"
+assert_contains "timeout disabled" "${DISC_DIR}/log/calls.log" "DiscoverableTimeout u 0"
+assert_contains "Discoverable is set" "${DISC_DIR}/log/calls.log" "Adapter1 Discoverable b true"
+
+# 4. BlueZ refusing everything must exit 1 (the caller only warns) and never hang
+cat > "${DISC_DIR}/bin/busctl" <<'EOS'
+#!/bin/sh
+exit 1
+EOS
+chmod +x "${DISC_DIR}/bin/busctl"
+OUT="$(PATH="${DISC_DIR}/bin:${SYSBIN}" REMOTE_GAMEPAD_SYS_BLUETOOTH="${DISC_DIR}/sys/class/bluetooth" "$DISC" on 2>&1)"
+assert_eq "BlueZ refusal is reported as exit 1" 1 $?
+assert_contains "refusal is explained" <(printf '%s' "$OUT") "BlueZ refused the request"
+
+# 5. unknown action is a usage error
+OUT="$(PATH="${DISC_DIR}/bin:${SYSBIN}" "$DISC" sideways 2>&1)"
+assert_eq "unknown action exits 2" 2 $?
+
+# ==========================================================================
+head1 "Server sources: Bluetooth startup must not depend on discoverability"
+# These checks run without the .NET SDK. The behavioural tests live in
+# Server/RemoteGamepadServer.Tests and run through ./scripts/test-linux.sh.
+SRC="${REPO_ROOT}/Server/RemoteGamepadServer"
+TESTS_SRC="${REPO_ROOT}/Server/RemoteGamepadServer.Tests"
+
+assert_not_contains "Start() no longer sets RadioMode directly" "${SRC}/BluetoothServer.cs" "RadioMode.Discoverable"
+assert_not_contains "Start() no longer touches BluetoothRadio" "${SRC}/BluetoothServer.cs" "BluetoothRadio.Default"
+assert_contains "startup goes through the discoverability policy" "${SRC}/BluetoothServer.cs" "BluetoothDiscoverability.Apply("
+assert_contains "discoverability is injectable" "${SRC}/BluetoothServer.cs" "IBluetoothDiscoverability? discoverability"
+assert_contains "RFCOMM bind is still there"   "${SRC}/BluetoothServer.cs" "binding RFCOMM channel 1"
+assert_contains "RFCOMM listen is still there" "${SRC}/BluetoothServer.cs" "listening on RFCOMM channel 1"
+assert_contains "native SDP registration is still there" "${SRC}/BluetoothServer.cs" "RegisterSdpRecord();"
+assert_contains "SDP success message is unchanged" "${SRC}/BluetoothServer.cs" \
+    "[BT] Native BlueZ SPP SDP record registered on RFCOMM channel 1"
+
+# Order matters: discoverability first, then socket -> bind -> listen -> SDP.
+mapfile -t ORDER < <(grep -n 'BluetoothDiscoverability.Apply(\|bluetoothSocket(AfBluetooth\|binding RFCOMM channel 1\|RegisterSdpRecord();' \
+    "${SRC}/BluetoothServer.cs" | head -4 | cut -d: -f1)
+if [ "${#ORDER[@]}" -eq 4 ] &&
+   [ "${ORDER[0]}" -lt "${ORDER[1]}" ] && [ "${ORDER[1]}" -lt "${ORDER[2]}" ] && [ "${ORDER[2]}" -lt "${ORDER[3]}" ]; then
+    ok "startup order: discoverability -> socket -> bind -> SDP"
+else
+    bad "startup order: discoverability -> socket -> bind -> SDP (lines: ${ORDER[*]})"
+fi
+
+assert_contains "required log line (failure)" "${SRC}/BluetoothDiscoverability.cs" \
+    "[BT] Discoverable mode could not be enabled through InTheHand/BlueZ: "
+assert_contains "required log line (continue)" "${SRC}/BluetoothDiscoverability.cs" \
+    "[BT] Continuing with RFCOMM/SDP registration."
+assert_contains "providers must not throw" "${SRC}/BluetoothDiscoverability.cs" "catch (Exception ex)"
+assert_contains "Linux policy is best-effort" "${SRC}/BluetoothServer.cs" "!OperatingSystem.IsLinux()"
+assert_contains "server exposes the policy for tests" "${SRC}/BluetoothServer.cs" "public bool DiscoverabilityRequired"
+
+# Android protocol and controller mapping must be untouched by this fix.
+assert_contains "SPP UUID unchanged" "${SRC}/Protocol.cs" "00001101-0000-1000-8000-00805F9B34FB"
+assert_contains "UDP input port unchanged" "${SRC}/UdpInputServer.cs" "Port = 26760"
+assert_contains "UDP discovery port unchanged" "${SRC}/UdpDiscoveryListener.cs" "Port = 26761"
+assert_contains "controller state still has 20 fields" "${SRC}/InputParser.cs" "bool L3, bool R3"
+
+# The regression tests themselves.
+if [ -f "${TESTS_SRC}/RemoteGamepadServer.Tests.csproj" ]; then ok "regression test project exists"; else
+    bad "regression test project exists"; fi
+assert_contains "test project references the server" "${TESTS_SRC}/RemoteGamepadServer.Tests.csproj" \
+    "../RemoteGamepadServer/RemoteGamepadServer.csproj"
+assert_contains "regression test covers the BlueZ failure" "${TESTS_SRC}/Program.cs" "org.bluez.Error.Failed"
+assert_contains "regression test asserts startup continues" "${TESTS_SRC}/Program.cs" \
+    "Start() reaches RFCOMM/SDP after a BlueZ discoverability error"
+assert_contains "test-linux.sh runs the regression tests" "${SCRIPTS}/test-linux.sh" \
+    "dotnet run --project"
+
+# ==========================================================================
 head1 "Static checks"
 for script in "${SCRIPTS}"/*.sh "${SCRIPTS}"/lib/*.sh "${SCRIPTS}"/tests/*.sh; do
     if bash -n "$script" 2>/dev/null; then ok "bash -n $(basename "$script")"; else bad "bash -n $(basename "$script")"; fi
@@ -573,6 +741,13 @@ done
 assert_contains "path unit watches /run/sdp" "${REPO_ROOT}/systemd/remote-gamepad-sdp-permissions.path" "PathChanged=/run/sdp"
 assert_contains "path unit ordered before bluetooth" "${REPO_ROOT}/systemd/remote-gamepad-sdp-permissions.path" "Before=bluetooth.service"
 assert_contains "service unit carries the group" "${REPO_ROOT}/systemd/remote-gamepad-sdp-permissions.service" "REMOTE_GAMEPAD_SDP_GROUP=remote-gamepad"
+if sh -n "${SCRIPTS}/remote-gamepad-set-discoverable"; then ok "sh -n remote-gamepad-set-discoverable"; else bad "sh -n remote-gamepad-set-discoverable"; fi
+DISC_UNIT_SRC="${REPO_ROOT}/systemd/remote-gamepad-discoverable.service"
+assert_contains "discoverable unit runs the helper" "$DISC_UNIT_SRC" "ExecStart=/usr/local/libexec/remote-gamepad-set-discoverable on"
+assert_contains "discoverable unit follows bluetooth" "$DISC_UNIT_SRC" "PartOf=bluetooth.service"
+assert_contains "discoverable unit installs into bluetooth.service" "$DISC_UNIT_SRC" "WantedBy=bluetooth.service"
+assert_contains "discoverable unit tolerates a BlueZ refusal" "$DISC_UNIT_SRC" "SuccessExitStatus=0 1"
+assert_contains "discoverable unit skips machines without an adapter" "$DISC_UNIT_SRC" "ConditionPathExistsGlob=/sys/class/bluetooth/hci*"
 
 # ==========================================================================
 printf '\n\033[1mResult:\033[0m %d passed, %d failed\n' "$PASS" "$FAIL"

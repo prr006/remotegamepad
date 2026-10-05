@@ -230,6 +230,25 @@ if [ -x "$RG_SDP_HELPER" ]; then
     rg_field "SDP helper" "$RG_SDP_HELPER" ok
 fi
 
+# Adapter visibility. Purely informational: the server needs RFCOMM + SDP, not
+# discoverability, so nothing here is counted as a problem.
+if [ -n "$ADAPTERS" ]; then
+    DISC_STATUS="$(rg_discoverable_status || true)"
+    if [ -n "$DISC_STATUS" ]; then
+        DISCOVERABLE="$(rg_discoverable_field discoverable "$DISC_STATUS" || echo unknown)"
+        POWERED="$(rg_discoverable_field powered "$DISC_STATUS" || echo unknown)"
+        rg_field "Adapter powered" "$POWERED" "$([ "$POWERED" = "true" ] && echo ok || echo info)"
+        case "$DISCOVERABLE" in
+            true)  rg_field "Discoverable" "yes (phones can find this machine)" ok ;;
+            false) rg_field "Discoverable" "no — fine for an already paired phone; 'sudo ./scripts/setup-linux.sh --discoverable' or 'bluetoothctl discoverable on' to change it" ;;
+            *)     rg_field "Discoverable" "unknown (no busctl/dbus-send/bluetoothctl, or bluetoothd not running)" ;;
+        esac
+    fi
+fi
+if rg_have systemctl && [ -f "${RG_SYSTEMD_UNIT_DIR}/${RG_DISCOVERABLE_UNIT}" ]; then
+    rg_field "Discoverable unit" "$(rg_unit_state "$RG_DISCOVERABLE_UNIT")"
+fi
+
 # RemoteGamepad SDP record — only observable while the server is running.
 if rg_have sdptool; then
     if SDP_OUT="$(sdptool browse local 2>&1)"; then

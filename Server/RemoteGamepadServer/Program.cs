@@ -35,7 +35,12 @@ class Program
             await using var discovery = new UdpDiscoveryListener();
             await using var input = new UdpInputServer(state => ApplyState(state, "Wi-Fi"));
             var tasks = new[] { discovery.RunAsync(cancellation.Token), input.RunAsync(cancellation.Token) };
-            using var bluetooth = new BluetoothServer();
+            // Discoverability is optional on Linux; --no-discoverable skips the attempt
+            // entirely (and the BlueZ warning that comes with it) for already-paired phones.
+            var discoverability = args.Contains("--no-discoverable", StringComparer.Ordinal)
+                ? new DisabledDiscoverability()
+                : (IBluetoothDiscoverability?)null;
+            using var bluetooth = new BluetoothServer(discoverability);
             bluetooth.InputReceived += (_, state) => ApplyState(state, "Bluetooth");
             bluetooth.Disconnected += (_, _) =>
             {

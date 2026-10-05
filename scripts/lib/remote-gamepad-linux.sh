@@ -49,6 +49,11 @@ RG_BT_DROPIN="${RG_BT_DROPIN_DIR}/10-remote-gamepad-compat.conf"
 RG_SDP_HELPER="${RG_PREFIX}/usr/local/libexec/remote-gamepad-fix-sdp-permissions"
 RG_SDP_PATH_UNIT="remote-gamepad-sdp-permissions.path"
 RG_SDP_SERVICE_UNIT="remote-gamepad-sdp-permissions.service"
+
+# Optional adapter-visibility helper (setup-linux.sh --discoverable). Never
+# required for RFCOMM/SDP: it only makes pairing from the phone easier.
+RG_DISCOVERABLE_HELPER="${RG_PREFIX}/usr/local/libexec/remote-gamepad-set-discoverable"
+RG_DISCOVERABLE_UNIT="remote-gamepad-discoverable.service"
 RG_SDP_SOCKET="${REMOTE_GAMEPAD_SDP_SOCKET:-/run/sdp}"
 RG_UINPUT_DEV="${REMOTE_GAMEPAD_UINPUT_DEV:-/dev/uinput}"
 RG_SYS_BLUETOOTH_DIR="${REMOTE_GAMEPAD_SYS_BLUETOOTH:-/sys/class/bluetooth}"
@@ -117,7 +122,7 @@ rg_field() {
         ok)   marker="${RG_C_GREEN}[ ok ]${RG_C_RESET} " ;;
         warn) marker="${RG_C_YELLOW}[warn]${RG_C_RESET} " ;;
         fail) marker="${RG_C_RED}[fail]${RG_C_RESET} " ;;
-        info|'') marker="       " ;;
+        *)    marker="       " ;;
     esac
     printf '  %s%-22s : %s\n' "$marker" "$label" "$value"
 }
@@ -443,6 +448,27 @@ rg_bluetoothd_running_compat() {
     return 1
 }
 
+# Runs the repository copy of the discoverability helper (on|off|status).
+# There is exactly one implementation; the installed copy and this call site
+# both use scripts/remote-gamepad-set-discoverable.
+rg_discoverable_helper() {
+    local helper="${RG_SCRIPT_DIR:-}/remote-gamepad-set-discoverable"
+    [ -x "$helper" ] || return 127
+    "$helper" "$@"
+}
+
+# Prints "key=value" lines (adapter/powered/discoverable/pairable/...) or nothing.
+rg_discoverable_status() {
+    rg_discoverable_helper status 2>/dev/null || return 1
+}
+
+# Extracts one field from rg_discoverable_status output.
+rg_discoverable_field() {
+    local field="$1" status="${2:-}"
+    [ -n "$status" ] || status="$(rg_discoverable_status || true)"
+    printf '%s\n' "$status" | awk -F= -v key="$field" '$1 == key { print $2; found = 1 } END { exit !found }'
+}
+
 rg_bluetooth_adapters() {
     local found=''
     if [ -d "$RG_SYS_BLUETOOTH_DIR" ]; then
@@ -530,6 +556,7 @@ rg_is_root() { [ "$(id -u)" -eq 0 ]; }
 if [ -n "${RG_SCRIPT_DIR:-}" ]; then
     RG_REPO_ROOT="$(cd -- "${RG_SCRIPT_DIR}/.." && pwd)"
     RG_SERVER_DIR="${RG_REPO_ROOT}/Server/RemoteGamepadServer"
+    RG_SERVER_TESTS_DIR="${RG_REPO_ROOT}/Server/RemoteGamepadServer.Tests"
 fi
 
 rg_repo_root()  { printf '%s' "${RG_REPO_ROOT:-}"; }

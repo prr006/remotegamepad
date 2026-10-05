@@ -30,9 +30,20 @@ The Android protocol text/fields were checked against the upstream `main`
 (read-only); no Android source was changed. The implementation has **not** been
 built or run in the Arena environment used for the Linux portability work: it
 has no `dotnet`, `/dev/uinput`, Bluetooth adapter, `bluetoothctl` or running
-BlueZ. Build, uinput, network, RFCOMM and physical Android interoperability
-therefore remain unverified there. The Linux shell scripts themselves are
-exercised by `scripts/tests/linux-scripts-test.sh`.
+BlueZ (and no network access to NuGet or the .NET CDN). Build, uinput, network,
+RFCOMM and physical Android interoperability therefore remain unverified there.
+
+What *is* verified in-repo:
+
+* `scripts/tests/linux-scripts-test.sh` exercises the shell scripts end to end
+  (including a real install/uninstall cycle in a scratch prefix) and statically
+  pins the Bluetooth startup contract in `BluetoothServer.cs`
+  (no `RadioMode.Discoverable` in `Start()`, discoverability → socket → bind →
+  SDP ordering, required log lines, unchanged protocol/ports/mapping);
+* `Server/RemoteGamepadServer.Tests` contains the behavioural regression tests
+  for the discoverability policy; run them on a machine with the .NET 10 SDK via
+  `./scripts/test-linux.sh` or
+  `dotnet run --project Server/RemoteGamepadServer.Tests -c Release`.
 
 ## Diagnostics built into the server
 
@@ -61,9 +72,9 @@ neutral on that axis.
 
 ## Bluetooth Classic / SPP
 
-Adapter discovery/power/discoverability use InTheHand 32feet.NET 4.2.5
-(`BluetoothRadio.Default`); RFCOMM uses Linux Bluetooth sockets and native
-BlueZ/libbluetooth SDP APIs (runtime library `libbluetooth.so.3`, provided by
+Adapter description and the optional discoverable switch use InTheHand
+32feet.NET 4.2.5 (`BluetoothRadio.Default`); RFCOMM uses Linux Bluetooth sockets
+and native BlueZ/libbluetooth SDP APIs (runtime library `libbluetooth.so.3`, provided by
 the distribution's BlueZ package — `bluez-libs` on Fedora/Arch, `libbluetooth3`
 on Debian/Ubuntu). The server binds RFCOMM channel 1 and registers the standard
 SPP UUID `00001101-0000-1000-8000-00805F9B34FB`, with L2CAP and RFCOMM protocol
@@ -73,6 +84,44 @@ listener stops. The Bluetooth listener handles the existing 4-byte big-endian
 length-prefixed UTF-8 protocol (`HELLO`/`HELLO_ACK`, `PING`/`PONG`,
 `DISCONNECT`, and `INPUT|{json}`). UDP and RFCOMM share the same uinput device;
 each complete state update replaces the previous state (last update wins).
+
+### Discoverability is best-effort, never a prerequisite
+
+`BluetoothServer.Start()` used to begin with
+`BluetoothRadio.Default.Mode = RadioMode.Discoverable`. On BlueZ that is a D-Bus
+property write on `org.bluez.Adapter1`, and BlueZ answers
+`org.bluez.Error.Failed` in several ordinary situations (adapter not powered, no
+polkit-authorised session, controller/kernel quirks — reported on Fedora 44 with
+BlueZ 5.87). The exception propagated out of `Start()`, so Bluetooth was dead
+even though `/run/sdp`, `libbluetooth.so.3`, uinput and compatibility mode were
+all fine.
+
+The operation now lives behind `IBluetoothDiscoverability`
+(`BluetoothDiscoverability.cs`):
+
+* `InTheHandDiscoverability` wraps `BluetoothRadio.Default` and **reports**
+  failures (including a null radio) instead of throwing;
+* `BluetoothDiscoverability.Apply(provider, required, log)` decides what a
+  failure means. `required` defaults to `!OperatingSystem.IsLinux()`, so Linux
+  logs
+
+  ```text
+  [BT] Discoverable mode could not be enabled through InTheHand/BlueZ: <error>
+  [BT] Continuing with RFCOMM/SDP registration.
+  ```
+
+  and continues into socket creation, RFCOMM channel 1 bind/listen and native
+  SDP registration, while every other platform keeps the previous hard failure;
+* `DisabledDiscoverability` backs the server's `--no-discoverable` flag;
+* the server takes the provider, the policy flag and its log sink as optional
+  constructor arguments, which is what
+  `Server/RemoteGamepadServer.Tests` uses to simulate `org.bluez.Error.Failed`
+  and assert that startup still reaches RFCOMM/SDP.
+
+Making the adapter visible for pairing is handled outside the server by
+`scripts/remote-gamepad-set-discoverable` (busctl → dbus-send → bluetoothctl)
+and the optional `remote-gamepad-discoverable.service` installed by
+`setup-linux.sh --discoverable`.
 
 ### Why the local SDP socket needs system configuration
 

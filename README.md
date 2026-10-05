@@ -36,12 +36,14 @@ RemoteGamepad/
 │               │   ├── colors.xml
 │               │   └── themes.xml
 │               └── drawable/
-├── Server/                     # C# Windows console server
-│   └── RemoteGamepadServer/
-│       ├── RemoteGamepadServer.csproj
-│       ├── Protocol.cs         # Framing (identical to Android)
-│       ├── BluetoothServer.cs  # Isolated transport layer
-│       └── Program.cs          # Entry point + CLI
+├── Server/                     # C# console server (Windows + Linux)
+│   ├── RemoteGamepadServer/
+│   │   ├── RemoteGamepadServer.csproj
+│   │   ├── Protocol.cs         # Framing (identical to Android)
+│   │   ├── BluetoothServer.cs  # Isolated transport layer
+│   │   ├── BluetoothDiscoverability.cs  # Best-effort adapter visibility
+│   │   └── Program.cs          # Entry point + CLI
+│   └── RemoteGamepadServer.Tests/       # Regression tests (dotnet run)
 ├── scripts/
 │   ├── build-android.sh
 │   ├── build-server.sh            # Windows build (publish win-x64)
@@ -50,11 +52,12 @@ RemoteGamepad/
 │   ├── build-server-linux.sh      # Linux: restore + Release build
 │   ├── run-server-linux.sh        # Linux: run unprivileged
 │   ├── check-linux.sh             # Linux: environment report
-│   ├── test-linux.sh              # Linux: uinput self-test
+│   ├── test-linux.sh              # Linux: regression tests + uinput self-test
 │   ├── uninstall-linux.sh         # Linux: remove RemoteGamepad config
+│   ├── remote-gamepad-set-discoverable  # optional adapter visibility helper
 │   ├── lib/remote-gamepad-linux.sh
 │   └── tests/linux-scripts-test.sh
-├── systemd/                       # /run/sdp permission watcher units
+├── systemd/                       # /run/sdp watcher + optional discoverable unit
 ├── docs/
 │   └── Linux.md                   # Linux setup, build, test, run, troubleshooting
 └── README.md
@@ -115,7 +118,7 @@ sudo ./scripts/setup-linux.sh     # one-time setup (groups, udev, uinput, BlueZ)
 # log out and back in, then:
 ./scripts/check-linux.sh          # environment report
 ./scripts/build-server-linux.sh   # restore + Release build
-./scripts/test-linux.sh           # uinput self-test (no Bluetooth required)
+./scripts/test-linux.sh           # regression tests + uinput self-test
 ./scripts/run-server-linux.sh     # run the server
 sudo ./scripts/uninstall-linux.sh # remove only RemoteGamepad's configuration
 ```
@@ -123,7 +126,9 @@ sudo ./scripts/uninstall-linux.sh # remove only RemoteGamepad's configuration
 Supported distribution families: **Fedora/RHEL (`dnf`), Debian/Ubuntu (`apt`),
 Arch (`pacman`), openSUSE (`zypper`)** and any other systemd distribution
 (configuration is applied; packages are reported for manual installation).
-Machines without Bluetooth hardware are fully supported in Wi-Fi-only mode.
+Machines without Bluetooth hardware are fully supported in Wi-Fi-only mode, and
+Bluetooth starts even when BlueZ refuses discoverable mode
+(`org.bluez.Error.Failed`) — RFCOMM and SDP do not depend on it.
 
 📖 **Full guide: [docs/Linux.md](docs/Linux.md)** — setup, build, test, run,
 Wi-Fi-only mode, Bluetooth requirements, troubleshooting, uninstall and

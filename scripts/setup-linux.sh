@@ -27,6 +27,7 @@ ASSUME_YES=0
 DO_INSTALL=1
 DO_BLUETOOTH=1
 DO_SDP_TOOLS=1
+DO_DISCOVERABLE=0
 RESTART_BLUETOOTH=auto
 RG_TARGET_USER="${RG_TARGET_USER:-}"
 
@@ -48,6 +49,10 @@ Options:
       --no-bluetooth      Wi-Fi/UDP only: skip all BlueZ configuration.
       --no-sdp-tools      Do not install the optional deprecated BlueZ tools
                           (sdptool) used for verification.
+      --discoverable      Optional: make the adapter visible for pairing now and
+                          keep it visible across reboots (installs
+                          ${RG_DISCOVERABLE_UNIT}). RFCOMM/SDP work
+                          without it, so a failure is only a warning.
       --no-restart-bluetooth
                           Apply the Bluetooth configuration but never restart
                           bluetooth.service (takes effect on next restart).
@@ -61,6 +66,7 @@ Examples:
   sudo ./scripts/setup-linux.sh                 # interactive, full setup
   sudo ./scripts/setup-linux.sh --yes           # unattended
   sudo ./scripts/setup-linux.sh --no-bluetooth  # Wi-Fi-only machine
+  sudo ./scripts/setup-linux.sh --discoverable  # also keep the adapter pairable
   ./scripts/setup-linux.sh --dry-run            # show planned changes only
 EOF
 }
@@ -75,6 +81,8 @@ while [ $# -gt 0 ]; do
         --no-install)            DO_INSTALL=0 ;;
         --no-bluetooth)          DO_BLUETOOTH=0 ;;
         --no-sdp-tools)          DO_SDP_TOOLS=0 ;;
+        --discoverable)          DO_DISCOVERABLE=1 ;;
+        --no-discoverable)       DO_DISCOVERABLE=0 ;;
         --no-restart-bluetooth)  RESTART_BLUETOOTH=never ;;
         --restart-bluetooth)     RESTART_BLUETOOTH=always ;;
         --dry-run)               RG_DRY_RUN=1 ;;  # consumed by the library
@@ -449,13 +457,17 @@ fi
 BLUETOOTH_CHANGED=0
 SDP_CONFIGURED=0
 
-if [ "$DO_BLUETOOTH" = "0" ]; then
+if [ "$DO_BLUETOOTH" = "0" ] || [ -z "$BLUETOOTHD" ]; then
     rg_section "Bluetooth"
-    rg_info "Skipped (${BLUETOOTH_SKIP_REASON:---no-bluetooth was given}). Wi-Fi/UDP transport is fully functional without it."
-elif [ -z "$BLUETOOTHD" ]; then
-    rg_section "Bluetooth"
-    note_warn "bluetoothd was not found. Skipping Bluetooth configuration; the server still works over Wi-Fi/UDP."
-    rg_info "Install BlueZ and re-run this script to enable the Bluetooth transport."
+    if [ "$DO_BLUETOOTH" = "0" ]; then
+        rg_info "Skipped (${BLUETOOTH_SKIP_REASON:---no-bluetooth was given}). Wi-Fi/UDP transport is fully functional without it."
+    else
+        note_warn "bluetoothd was not found. Skipping Bluetooth configuration; the server still works over Wi-Fi/UDP."
+        rg_info "Install BlueZ and re-run this script to enable the Bluetooth transport."
+    fi
+    if [ "$DO_DISCOVERABLE" = "1" ]; then
+        note_warn "--discoverable was ignored: it only applies when Bluetooth is configured."
+    fi
 else
     rg_section "Bluetooth (BlueZ compatibility SDP mode)"
     rg_field "bluetoothd" "$BLUETOOTHD" ok
@@ -591,6 +603,41 @@ EOF
     else
         rg_dim "   No adapter and no ${RG_SDP_SOCKET} socket — expected on a Wi-Fi-only machine."
     fi
+
+    # 5e. Optional: adapter discoverability. Completely separate from RFCOMM/SDP
+    #     and deliberately best-effort — BlueZ refusing it is only a warning.
+    rg_section "Bluetooth discoverability (optional)"
+    if [ "$DO_DISCOVERABLE" = "1" ]; then
+        rg_install_file "$RG_DISCOVERABLE_HELPER" 0755 < "${RG_SCRIPT_DIR}/remote-gamepad-set-discoverable"
+        rg_install_file "${RG_SYSTEMD_UNIT_DIR}/${RG_DISCOVERABLE_UNIT}" 0644 \
+            < "${RG_REPO_ROOT}/systemd/${RG_DISCOVERABLE_UNIT}"
+        rg_daemon_reload
+        if rg_systemd_running; then
+            rg_run systemctl enable "$RG_DISCOVERABLE_UNIT" ||
+                note_warn "Could not enable ${RG_DISCOVERABLE_UNIT}; the adapter will not be made visible at boot."
+        else
+            rg_dim "   systemd is not running; the unit takes effect on the next boot."
+        fi
+        if rg_dry_run; then
+            rg_info "Would make ${ADAPTERS:-the adapter} discoverable now."
+        elif [ -z "$ADAPTERS" ]; then
+            rg_dim "   No adapter present; the unit will run when one appears."
+        elif rg_discoverable_helper on; then
+            rg_ok "Adapter is discoverable and pairable now, and after every reboot."
+        else
+            note_warn "BlueZ refused to make the adapter discoverable. RFCOMM/SDP are unaffected; pair from this machine instead, or retry with: bluetoothctl discoverable on"
+        fi
+    else
+        status="$(rg_discoverable_status || true)"
+        if [ -n "$status" ] && [ "$(rg_discoverable_field adapter "$status" || true)" != "none" ]; then
+            rg_field "Discoverable now" "$(rg_discoverable_field discoverable "$status" || echo unknown)"
+        fi
+        if [ -f "${RG_SYSTEMD_UNIT_DIR}/${RG_DISCOVERABLE_UNIT}" ]; then
+            rg_info "${RG_DISCOVERABLE_UNIT} stays installed from an earlier run (remove it with uninstall-linux.sh)."
+        else
+            rg_dim "   Not configured. The server does not need it; add --discoverable to keep this machine visible for pairing."
+        fi
+    fi
 fi
 
 # --------------------------------------------------------------------------
@@ -606,6 +653,7 @@ REMOTE_GAMEPAD_FAMILY=${FAMILY}
 REMOTE_GAMEPAD_BLUETOOTHD=${BLUETOOTHD:-}
 REMOTE_GAMEPAD_BT_DROPIN=$([ -f "$RG_BT_DROPIN" ] && echo yes || echo no)
 REMOTE_GAMEPAD_SDP_WATCHER=$([ "$SDP_CONFIGURED" = "1" ] && echo yes || echo no)
+REMOTE_GAMEPAD_DISCOVERABLE_UNIT=$([ -f "${RG_SYSTEMD_UNIT_DIR}/${RG_DISCOVERABLE_UNIT}" ] && echo yes || echo no)
 REMOTE_GAMEPAD_SETUP_VERSION=1
 EOF
 
@@ -623,6 +671,10 @@ if [ "$SDP_CONFIGURED" = "1" ]; then
     rg_info "  ${RG_SYSTEMD_UNIT_DIR}/${RG_SDP_SERVICE_UNIT}"
 fi
 if [ -f "$RG_BT_DROPIN" ]; then rg_info "  ${RG_BT_DROPIN}"; fi
+if [ -f "${RG_SYSTEMD_UNIT_DIR}/${RG_DISCOVERABLE_UNIT}" ]; then
+    rg_info "  ${RG_DISCOVERABLE_HELPER}"
+    rg_info "  ${RG_SYSTEMD_UNIT_DIR}/${RG_DISCOVERABLE_UNIT}"
+fi
 rg_info "  ${RG_STATE_FILE}"
 
 if [ "$RELOGIN_REQUIRED" = "1" ]; then
@@ -635,7 +687,7 @@ echo
 rg_info "Next steps:"
 rg_info "  ./scripts/check-linux.sh          # verify the environment"
 rg_info "  ./scripts/build-server-linux.sh   # restore + Release build"
-rg_info "  ./scripts/test-linux.sh           # uinput self-test (no Bluetooth needed)"
+rg_info "  ./scripts/test-linux.sh           # regression tests + uinput self-test"
 rg_info "  ./scripts/run-server-linux.sh     # run as your normal user, never sudo"
 
 if [ "$WARNINGS" -gt 0 ]; then

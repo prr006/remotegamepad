@@ -135,6 +135,7 @@ What it does:
 | `--no-install` | Never install packages; only report what is missing. |
 | `--no-bluetooth` | Wi-Fi-only machine: skip all BlueZ configuration. |
 | `--no-sdp-tools` | Do not install the optional deprecated BlueZ tools (`sdptool`). |
+| `--discoverable` | Optional: power the adapter, make it visible/pairable now and keep it visible across reboots (installs `remote-gamepad-discoverable.service`). Never required for RFCOMM/SDP; a BlueZ refusal is only a warning. |
 | `--no-restart-bluetooth` | Apply the configuration but never restart `bluetooth.service`. |
 | `--restart-bluetooth` | Always restart `bluetooth.service` when something changed. |
 | `--dry-run` | Print every change without touching the system (works without root). |
@@ -169,7 +170,18 @@ need it. Extra arguments are forwarded to `dotnet build`.
 
 1. Verifies the uinput prerequisites: module loaded (or built in), `/dev/uinput`
    present, writable by *your* user, the `remote-gamepad` group, .NET 10 SDK.
-2. Runs the server's existing self-test:
+2. Runs the managed regression tests:
+
+   ```sh
+   dotnet run --project Server/RemoteGamepadServer.Tests -c Release
+   ```
+
+   which pin the Bluetooth startup behaviour: a simulated
+   `org.bluez.Error.Failed` from the discoverability step must be logged and
+   ignored so RFCOMM bind/listen and SDP registration still run (plus the
+   protocol/port/mapping invariants). They need no adapter, no root and no
+   uinput device.
+3. Runs the server's existing self-test:
 
    ```sh
    dotnet run -c Release -- --uinput-self-test
@@ -179,10 +191,12 @@ need it. Extra arguments are forwarded to `dotnet build`.
    then emits every digital press/release and stick/trigger extreme with
    `[SELF-TEST]` labels.
 
-**Bluetooth is not required** — the test exercises only the kernel uinput path,
-so it passes on Wi-Fi-only machines with no adapter and no BlueZ.
+**Bluetooth is not required** — the tests exercise only the kernel uinput path
+and pure managed logic, so they pass on Wi-Fi-only machines with no adapter and
+no BlueZ.
 
-Options: `--prereqs-only` (skip the server run), `--timeout SECONDS`.
+Options: `--prereqs-only` (checks only), `--no-unit-tests` (skip the managed
+regression tests), `--timeout SECONDS`.
 
 While the server runs you can confirm the device from another terminal:
 
@@ -277,6 +291,31 @@ sudo ./scripts/setup-linux.sh --no-bluetooth
    that group exists, for the D-Bus policy on Debian/Ubuntu).
 5. **A powered adapter** and the phone paired with the PC.
 
+**Not** a requirement: *discoverable* mode. The server registers its SPP record
+and listens on RFCOMM channel 1 whether or not the adapter is visible to other
+devices — discoverability only matters while you pair the phone the first time.
+BlueZ frequently refuses the request (`org.bluez.Error.Failed`, e.g. on
+Fedora 44 / BlueZ 5.87), so the server logs the refusal and keeps going:
+
+```text
+[BT] Discoverable mode could not be enabled through InTheHand/BlueZ: org.bluez.Error.Failed: Failed
+[BT] Continuing with RFCOMM/SDP registration.
+[BT] Native BlueZ SPP SDP record registered on RFCOMM channel 1
+```
+
+If you do want the machine to stay visible, use the optional helper:
+
+```sh
+sudo ./scripts/setup-linux.sh --discoverable   # now and after every reboot
+./scripts/remote-gamepad-set-discoverable on   # just for this session
+./scripts/remote-gamepad-set-discoverable status
+```
+
+It powers the adapter, clears `DiscoverableTimeout` and sets `Discoverable`
+through `busctl`, falling back to `dbus-send` and then `bluetoothctl`. Failure is
+always a warning: it can never stop the RFCOMM listener from starting. Run the
+server with `--no-discoverable` to skip the attempt (and its warning) entirely.
+
 Verification:
 
 ```sh
@@ -324,6 +363,21 @@ should be *active (waiting)*; if not,
 No adapter, adapter off, or the daemon is not running:
 `bluetoothctl show`, `rfkill list`, `systemctl status bluetooth`.
 
+**`org.bluez.Error.Failed` when the server enables discoverable mode**
+Harmless by design since this is best-effort: the log continues with
+`[BT] Continuing with RFCOMM/SDP registration.` and Bluetooth still works for a
+paired phone. Common causes are an unpowered adapter, a session without polkit
+authorisation (SSH, service) or a controller/kernel quirk. To fix it anyway:
+
+```sh
+./scripts/remote-gamepad-set-discoverable status   # powered? discoverable?
+sudo ./scripts/setup-linux.sh --discoverable       # power + make visible, persistently
+rfkill list bluetooth                              # soft/hard blocked?
+```
+
+Start the server with `./scripts/run-server-linux.sh --no-discoverable` if you
+never need the machine to be visible.
+
 **Adapter visible but the server cannot change its mode (D-Bus)**
 On Debian/Ubuntu make sure you are in the `bluetooth` group (setup does this
 when the group exists) and that you are logged into a normal desktop session.
@@ -361,6 +415,9 @@ Removes **only** what the setup script created:
 * `/etc/systemd/system/remote-gamepad-sdp-permissions.{path,service}` and their
   `.wants` symlinks
 * `/usr/local/libexec/remote-gamepad-fix-sdp-permissions`
+* `/etc/systemd/system/remote-gamepad-discoverable.service`, its `.wants`
+  symlink and `/usr/local/libexec/remote-gamepad-set-discoverable`
+  (only present after `--discoverable`)
 * `/etc/remote-gamepad/setup.env`
 
 then reloads systemd and udev, optionally restarts `bluetooth.service` and

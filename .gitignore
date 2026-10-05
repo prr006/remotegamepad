@@ -56,3 +56,6 @@ htmlcov/
 *.tar.bz2
 *.tar.xz
 *.tar.zst
+# .NET build output
+Server/**/bin/
+Server/**/obj/

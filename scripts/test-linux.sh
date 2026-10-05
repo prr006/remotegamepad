@@ -9,7 +9,7 @@
 # kernel uinput path (parser -> virtual controller), so it passes on
 # Wi-Fi-only machines with no Bluetooth hardware.
 #
-# Usage: ./scripts/test-linux.sh [--skip-build] [--timeout SECONDS]
+# Usage: ./scripts/test-linux.sh [--prereqs-only] [--no-unit-tests] [--timeout SECONDS]
 set -euo pipefail
 
 RG_SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,23 +18,28 @@ RG_SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 TIMEOUT_SECONDS=180
 PREREQS_ONLY=0
+RUN_UNIT_TESTS=1
 while [ $# -gt 0 ]; do
     case "$1" in
         --timeout) TIMEOUT_SECONDS="${2:-180}"; shift ;;
         --timeout=*) TIMEOUT_SECONDS="${1#*=}" ;;
         --prereqs-only) PREREQS_ONLY=1 ;;
+        --no-unit-tests) RUN_UNIT_TESTS=0 ;;
         -h|--help)
             cat <<EOF
 ${RG_PROJECT_NAME} Linux uinput test
 
 Usage: $0 [options]
 
-  --prereqs-only     Only check the uinput prerequisites, do not run the server.
-  --timeout SECONDS  Abort the self-test after SECONDS (default: 180).
+  --prereqs-only     Only check the uinput prerequisites, do not run anything.
+  --no-unit-tests    Skip the managed regression tests (Bluetooth startup).
+  --timeout SECONDS  Abort each test run after SECONDS (default: 180).
 
-Runs the existing server self-test:
+Runs the managed regression tests:
+  dotnet run --project Server/RemoteGamepadServer.Tests -c Release
+and the existing server self-test:
   dotnet run -c Release -- --uinput-self-test
-Bluetooth is not required.
+Bluetooth is not required for either.
 EOF
             exit 0 ;;
         *) rg_err "Unknown option: $1"; exit 2 ;;
@@ -110,6 +115,27 @@ rg_ok "All uinput prerequisites satisfied."
 
 if [ "$PREREQS_ONLY" = "1" ]; then
     exit 0
+fi
+
+# --------------------------------------------------------------------------
+# Managed regression tests (no Bluetooth hardware, no root, no uinput needed)
+# --------------------------------------------------------------------------
+if [ "$RUN_UNIT_TESTS" = "1" ] && [ -f "${RG_SERVER_TESTS_DIR}/RemoteGamepadServer.Tests.csproj" ]; then
+    rg_section "Server regression tests"
+    rg_info "Command: dotnet run --project ${RG_SERVER_TESTS_DIR} -c Release"
+    unit_status=0
+    if rg_have timeout; then
+        timeout --foreground "${TIMEOUT_SECONDS}" \
+            dotnet run --project "$RG_SERVER_TESTS_DIR" -c Release || unit_status=$?
+    else
+        dotnet run --project "$RG_SERVER_TESTS_DIR" -c Release || unit_status=$?
+    fi
+    if [ "$unit_status" -ne 0 ]; then
+        echo
+        rg_err "Managed regression tests failed (exit code ${unit_status})."
+        exit "$unit_status"
+    fi
+    rg_ok "Managed regression tests passed."
 fi
 
 # --------------------------------------------------------------------------

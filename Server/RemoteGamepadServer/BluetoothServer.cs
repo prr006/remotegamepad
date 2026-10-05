@@ -1,6 +1,5 @@
 namespace RemoteGamepadServer;
 
-using InTheHand.Net.Bluetooth;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 
@@ -12,12 +11,38 @@ public sealed class BluetoothServer : IDisposable
     private const int ShutReadWrite = 2, MsgNoSignal = 0x4000;
     private const byte RfcommChannel = 1;
     private readonly object _sendLock = new();
+    private readonly IBluetoothDiscoverability _discoverability;
+    private readonly Action<string> _log;
     private int _listenerFd = -1, _clientFd = -1;
     private RfcommStream? _stream;
     private CancellationTokenSource? _serverCts;
     private Task? _acceptTask;
     private IntPtr _sdpSession;
     private IntPtr _sdpRecord;
+
+    /// <param name="discoverability">
+    /// Provider for the optional "make the adapter discoverable" step; defaults to
+    /// <see cref="InTheHandDiscoverability"/>. Tests inject a provider that simulates
+    /// <c>org.bluez.Error.Failed</c>.
+    /// </param>
+    /// <param name="discoverabilityRequired">
+    /// <c>null</c> (default) keeps the platform policy: best-effort on Linux, where BlueZ often
+    /// rejects the request while RFCOMM/SDP work fine, and required everywhere else so Windows
+    /// behaviour is unchanged.
+    /// </param>
+    /// <param name="log">Log sink; defaults to <see cref="Console.WriteLine(string)"/>.</param>
+    public BluetoothServer(
+        IBluetoothDiscoverability? discoverability = null,
+        bool? discoverabilityRequired = null,
+        Action<string>? log = null)
+    {
+        _discoverability = discoverability ?? new InTheHandDiscoverability();
+        DiscoverabilityRequired = discoverabilityRequired ?? !OperatingSystem.IsLinux();
+        _log = log ?? Console.WriteLine;
+    }
+
+    /// <summary>When false (Linux default) a failed discoverability attempt is logged and ignored.</summary>
+    public bool DiscoverabilityRequired { get; }
 
     public bool IsConnected => Volatile.Read(ref _clientFd) >= 0;
     public event EventHandler<string>? MessageReceived;
@@ -29,9 +54,10 @@ public sealed class BluetoothServer : IDisposable
     public void Start()
     {
         if (_listenerFd >= 0) throw new InvalidOperationException("Bluetooth server is already started.");
-        var radio = BluetoothRadio.Default;
-        radio.Mode = RadioMode.Discoverable;
-        Console.WriteLine($"[BT] Bluetooth adapter: {radio.Name} ({radio.LocalAddress})");
+
+        // Discoverability is advisory: on Linux a BlueZ failure (org.bluez.Error.Failed) is
+        // logged and startup continues straight into RFCOMM bind/listen and SDP registration.
+        BluetoothDiscoverability.Apply(_discoverability, DiscoverabilityRequired, _log);
 
         var fd = bluetoothSocket(AfBluetooth, SockStream | SockCloexec, BtpProtocolRfcomm);
         if (fd < 0) ThrowNative("creating RFCOMM socket");
@@ -44,8 +70,8 @@ public sealed class BluetoothServer : IDisposable
             _listenerFd = fd;
             RegisterSdpRecord();
 
-            Console.WriteLine($"[BT] RFCOMM listener active on channel {RfcommChannel}; SPP UUID {Protocol.SppUuid}");
-            Console.WriteLine("[BT] Waiting for Android RFCOMM connection...");
+            _log($"[BT] RFCOMM listener active on channel {RfcommChannel}; SPP UUID {Protocol.SppUuid}");
+            _log("[BT] Waiting for Android RFCOMM connection...");
             _serverCts = new CancellationTokenSource();
             var token = _serverCts.Token;
             _acceptTask = Task.Run(() => AcceptLoop(fd, token));
@@ -113,7 +139,7 @@ public sealed class BluetoothServer : IDisposable
             _sdpSession = session;
             _sdpRecord = record;
             session = record = IntPtr.Zero;
-            Console.WriteLine("[BT] Native BlueZ SPP SDP record registered on RFCOMM channel 1");
+            _log("[BT] Native BlueZ SPP SDP record registered on RFCOMM channel 1");
         }
         finally
         {
@@ -224,7 +250,7 @@ public sealed class BluetoothServer : IDisposable
         _stream = stream;
         try
         {
-            Console.WriteLine("[BT] Android RFCOMM client connected");
+            _log("[BT] Android RFCOMM client connected");
             Connected?.Invoke(this, EventArgs.Empty);
             ReadLoop(stream, token);
         }
@@ -235,7 +261,7 @@ public sealed class BluetoothServer : IDisposable
                 _stream = null;
                 stream.Dispose();
                 Disconnected?.Invoke(this, EventArgs.Empty);
-                Console.WriteLine("[BT] Client disconnected; waiting for a new connection");
+                _log("[BT] Client disconnected; waiting for a new connection");
             }
             else stream.Dispose();
         }
@@ -248,7 +274,7 @@ public sealed class BluetoothServer : IDisposable
             var message = Protocol.ReadMessage(stream, token);
             if (message is null) return;
             if (!message.StartsWith(Protocol.MSG_INPUT, StringComparison.Ordinal))
-                Console.WriteLine($"[BT] Received {message}");
+                _log($"[BT] Received {message}");
             MessageReceived?.Invoke(this, message);
             switch (message)
             {
@@ -305,7 +331,7 @@ public sealed class BluetoothServer : IDisposable
         _serverCts?.Dispose();
         _serverCts = null;
         UnregisterSdpRecord();
-        Console.WriteLine("[BT] RFCOMM listener stopped");
+        _log("[BT] RFCOMM listener stopped");
     }
 
     private static void ThrowNative(string operation)

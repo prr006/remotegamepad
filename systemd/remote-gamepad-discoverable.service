@@ -1,0 +1,30 @@
+[Unit]
+# Installed by RemoteGamepad scripts/setup-linux.sh --discoverable (OPTIONAL).
+# Keeps the Bluetooth adapter visible so an Android phone can find and pair with
+# this machine. RemoteGamepad itself does not need it: the RFCOMM listener and the
+# SDP record work with a hidden adapter, which is why this unit is opt-in and why
+# its failure never affects bluetooth.service or the server.
+Description=RemoteGamepad: keep the Bluetooth adapter discoverable
+Documentation=file:///usr/local/libexec/remote-gamepad-set-discoverable
+After=bluetooth.service dbus.service
+Requisite=bluetooth.service
+PartOf=bluetooth.service
+ConditionPathExistsGlob=/sys/class/bluetooth/hci*
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# bluetoothd publishes the adapter on D-Bus a moment after the service starts.
+Environment=REMOTE_GAMEPAD_DISCOVERABLE_WAIT=15
+ExecStart=/usr/local/libexec/remote-gamepad-set-discoverable on
+ExecStop=/usr/local/libexec/remote-gamepad-set-discoverable off
+# Best effort only: a refusal from BlueZ must not mark the Bluetooth stack failed.
+SuccessExitStatus=0 1
+ProtectHome=yes
+ProtectSystem=strict
+PrivateTmp=yes
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_BLUETOOTH
+
+[Install]
+WantedBy=bluetooth.service

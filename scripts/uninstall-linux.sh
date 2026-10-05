@@ -96,19 +96,24 @@ rg_info "Group in use: ${RG_GROUP}"
 BT_DROPIN_REMOVED=0
 
 # --------------------------------------------------------------------------
-# 1. systemd units (SDP watcher)
+# 1. systemd units (SDP watcher and the optional discoverability unit)
 # --------------------------------------------------------------------------
 if rg_have systemctl; then
     if rg_systemd_running; then
         rg_run_quiet systemctl disable --now "$RG_SDP_PATH_UNIT" || true
         rg_run_quiet systemctl stop "$RG_SDP_SERVICE_UNIT" || true
+        if [ -f "${RG_SYSTEMD_UNIT_DIR}/${RG_DISCOVERABLE_UNIT}" ]; then
+            rg_run_quiet systemctl disable --now "$RG_DISCOVERABLE_UNIT" || true
+        fi
     fi
 fi
 rg_remove_file "${RG_SYSTEMD_UNIT_DIR}/${RG_SDP_PATH_UNIT}"
 rg_remove_file "${RG_SYSTEMD_UNIT_DIR}/${RG_SDP_SERVICE_UNIT}"
-# Enablement symlink, in case systemd was not running when we disabled it.
+rg_remove_file "${RG_SYSTEMD_UNIT_DIR}/${RG_DISCOVERABLE_UNIT}"
+# Enablement symlinks, in case systemd was not running when we disabled them.
 rg_remove_file "${RG_SYSTEMD_UNIT_DIR}/bluetooth.service.wants/${RG_SDP_PATH_UNIT}"
 rg_remove_file "${RG_SYSTEMD_UNIT_DIR}/multi-user.target.wants/${RG_SDP_PATH_UNIT}"
+rg_remove_file "${RG_SYSTEMD_UNIT_DIR}/bluetooth.service.wants/${RG_DISCOVERABLE_UNIT}"
 
 # --------------------------------------------------------------------------
 # 2. Bluetooth compatibility drop-in (vendor unit was never modified)
@@ -123,9 +128,10 @@ if [ -f "$RG_BT_DROPIN" ]; then
 fi
 
 # --------------------------------------------------------------------------
-# 3. Helper
+# 3. Helpers
 # --------------------------------------------------------------------------
 rg_remove_file "$RG_SDP_HELPER"
+rg_remove_file "$RG_DISCOVERABLE_HELPER"
 
 # --------------------------------------------------------------------------
 # 4. udev rule + module autoload

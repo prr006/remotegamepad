@@ -1,0 +1,147 @@
+#!/bin/sh
+# RemoteGamepad: portable BlueZ adapter discoverability helper.
+#
+#   remote-gamepad-set-discoverable [on|off|status] [hciN]
+#
+# Discoverability is OPTIONAL for RemoteGamepad: the server only needs RFCOMM +
+# SDP, and the Android app connects to an already paired device. This helper only
+# makes the machine visible while pairing, so it must never be a hard dependency
+# of anything (the server starts regardless of the exit status below).
+#
+# Portability: BlueZ exposes the adapter on the system bus as
+# org.bluez /org/bluez/hciN org.bluez.Adapter1. The properties are set through
+# busctl (systemd, always present on the distributions we support), falling back
+# to dbus-send and finally to bluetoothctl, so the helper also works where
+# bluez-deprecated/bluez-utils are not installed.
+#
+# Exit codes: 0 = done (or nothing to do), 1 = adapter present but the request
+# failed, 2 = usage error.
+set -u
+
+PROGRAM="$(basename -- "$0")"
+ACTION="${1:-status}"
+ADAPTER="${2:-${REMOTE_GAMEPAD_ADAPTER:-}}"
+SYS_BLUETOOTH="${REMOTE_GAMEPAD_SYS_BLUETOOTH:-/sys/class/bluetooth}"
+# Seconds to wait for bluetoothd to publish the adapter. Interactive runs do not
+# wait; the systemd unit sets this because it starts together with bluetooth.service.
+WAIT_SECONDS="${REMOTE_GAMEPAD_DISCOVERABLE_WAIT:-0}"
+
+have() { command -v "$1" >/dev/null 2>&1; }
+log() { printf '%s: %s\n' "$PROGRAM" "$*"; }
+warn() { printf '%s: %s\n' "$PROGRAM" "$*" >&2; }
+
+case "$ACTION" in
+    on|off|status) ;;
+    -h|--help)
+        printf 'Usage: %s [on|off|status] [hciN]\n' "$PROGRAM"
+        exit 0 ;;
+    *)
+        warn "unknown action '$ACTION' (expected on, off or status)"
+        exit 2 ;;
+esac
+
+first_adapter() {
+    for dev in "$SYS_BLUETOOTH"/hci*; do
+        [ -e "$dev" ] || continue
+        basename -- "$dev"
+        return 0
+    done
+    return 1
+}
+
+# Wait for an adapter to show up; bluetoothd needs a moment after a restart.
+waited=0
+while [ -z "$ADAPTER" ]; do
+    ADAPTER="$(first_adapter || true)"
+    [ -n "$ADAPTER" ] && break
+    [ "$ACTION" = "on" ] || break
+    [ "$waited" -ge "$WAIT_SECONDS" ] && break
+    sleep 1
+    waited=$((waited + 1))
+done
+
+if [ -z "$ADAPTER" ]; then
+    # Wi-Fi-only machine: nothing to do, and that is not an error.
+    [ "$ACTION" = "status" ] && printf 'adapter=none\n'
+    [ "$ACTION" = "on" ] && log "no Bluetooth adapter present; nothing to make discoverable"
+    exit 0
+fi
+
+OBJECT="/org/bluez/${ADAPTER}"
+
+# Last field of a property reply: busctl prints 'b true' / 'u 180' / 's "name"',
+# dbus-send --print-reply=literal prints 'variant       boolean true'.
+last_field() { awk '{ gsub(/"/, "", $NF); print $NF }'; }
+
+get_property() {
+    _value=''
+    if have busctl; then
+        _value="$(busctl --no-pager get-property org.bluez "$OBJECT" org.bluez.Adapter1 "$1" 2>/dev/null | last_field)"
+    fi
+    if [ -z "$_value" ] && have dbus-send; then
+        _value="$(dbus-send --system --print-reply=literal --dest=org.bluez "$OBJECT" \
+            org.freedesktop.DBus.Properties.Get string:org.bluez.Adapter1 string:"$1" 2>/dev/null | last_field)"
+    fi
+    [ -n "$_value" ] || return 1
+    printf '%s' "$_value"
+}
+
+# set_property <name> <busctl-type> <value> <dbus-send-type>
+set_property() {
+    if have busctl && busctl --no-pager set-property org.bluez "$OBJECT" org.bluez.Adapter1 "$1" "$2" "$3" 2>/dev/null; then
+        return 0
+    fi
+    if have dbus-send && dbus-send --system --dest=org.bluez "$OBJECT" \
+        org.freedesktop.DBus.Properties.Set string:org.bluez.Adapter1 string:"$1" "variant:$4:$3" >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
+}
+
+bluetoothctl_fallback() {
+    have bluetoothctl || return 1
+    _state="$1"
+    # BlueZ >= 5.50 accepts non-interactive arguments; older builds read stdin.
+    if bluetoothctl -- power on >/dev/null 2>&1; then
+        [ "$_state" = "on" ] && bluetoothctl -- discoverable-timeout 0 >/dev/null 2>&1
+        bluetoothctl -- discoverable "$_state" >/dev/null 2>&1 && return 0
+    fi
+    printf 'power on\ndiscoverable %s\nquit\n' "$_state" | bluetoothctl >/dev/null 2>&1
+}
+
+case "$ACTION" in
+    status)
+        printf 'adapter=%s\n' "$ADAPTER"
+        printf 'powered=%s\n' "$(get_property Powered || echo unknown)"
+        printf 'discoverable=%s\n' "$(get_property Discoverable || echo unknown)"
+        printf 'pairable=%s\n' "$(get_property Pairable || echo unknown)"
+        printf 'discoverable_timeout=%s\n' "$(get_property DiscoverableTimeout || echo unknown)"
+        exit 0
+        ;;
+    on)
+        # An unpowered adapter is the most common reason why BlueZ answers
+        # org.bluez.Error.Failed when Discoverable is set, so power it first.
+        incomplete=0
+        set_property Powered b true boolean || incomplete=$((incomplete + 1))
+        # 0 = stay discoverable until it is switched off again.
+        set_property DiscoverableTimeout u 0 uint32 || incomplete=$((incomplete + 1))
+        set_property Pairable b true boolean || incomplete=$((incomplete + 1))
+
+        if set_property Discoverable b true boolean || bluetoothctl_fallback on; then
+            [ "$incomplete" -gt 0 ] &&
+                warn "${ADAPTER} is discoverable, but ${incomplete} adapter propertie(s) could not be set"
+            log "${ADAPTER} is discoverable and pairable"
+            exit 0
+        fi
+        warn "could not make ${ADAPTER} discoverable (BlueZ refused the request)"
+        exit 1
+        ;;
+    off)
+        if ! set_property Discoverable b false boolean && ! bluetoothctl_fallback off; then
+            warn "could not turn discoverable mode off on ${ADAPTER}"
+            exit 1
+        fi
+        log "${ADAPTER} is no longer discoverable"
+        exit 0
+        ;;
+esac
